@@ -32,7 +32,7 @@ def convert_vector_to_quaternion(vector_3d: np.ndarray) -> quaternion.quaternion
 
 def convert_quaternion_to_vector(quat: quaternion.quaternion) -> np.ndarray:
     result = quat.imag
-    if quat.real != 0.0:
+    if quat.real > 0.000001:
         print(
             'Warning: rotation_updater: quaternion to vector conversion, non-zero quaternion real part is', quat.real)
     return result

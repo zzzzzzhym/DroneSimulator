@@ -10,7 +10,7 @@ m = 4.34    # kg
 d = 0.315   # from drone center to motor center m
 inertia = np.diag([0.0820, 0.0845, 0.1377])  # kgm2
 inertia_inv = np.linalg.inv(inertia)
-c_tau_f = 8e-4  # m
+c_tau_f = 8.004e-4  # m
 
 x_1b = -d*np.cos(np.pi/4)
 y_1b = d*np.sin(np.pi/4)

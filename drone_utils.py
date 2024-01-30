@@ -38,6 +38,20 @@ def get_unit_vector_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.nda
         (2*v_dot*v_norm_dot)/v_norm**2 + (2*v*v_norm_dot**2)/v_norm**3
     return (b, b_dot, b_dot2)
 
+def get_signal_derivative(t: np.ndarray, v: np.ndarray, dt) -> (np.ndarray, np.ndarray) :
+     
+    t_dv = t[1:]
+    dim = np.ndim(v)
+    if 1 == dim:
+        dv = (v[1:] - v[:-1])/dt
+    elif 2 == dim:
+        dv = (v[1:, :] - v[:-1, :])/dt
+    elif 3 == dim:
+        dv = (v[1:, :, :] - v[:-1, :, :])/dt
+    else:
+        dv = t_dv - t_dv
+        print("Warning: get_signal_derivative: input dimension not in range, which is ", dim)
+    return t_dv, dv
 
 if __name__ == "__main__":
     v_test = np.array([1, 2, 3])

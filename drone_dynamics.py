@@ -20,7 +20,7 @@ class DroneDynamics:
         self.dv = np.array([0.0, 0.0, 0.0])
         self.domega = np.array([0.0, 0.0, 0.0])  # in body fix frame
 
-        self.f = np.array([0.0, 0.0, 0.0])
+        self.f = np.array([0.0, 0.0, 0.0])  # propulsion force opposite to self.pose[:,2]
         self.torque = np.array([0.0, 0.0, 0.0])
 
     def step_position(self) -> None:
@@ -34,7 +34,7 @@ class DroneDynamics:
         self.pose = rotation_instance.rotation_matrix
 
     def step_derivatives(self):
-        self.dv = params.g*np.array([0.0, 0.0, 1.0]) + \
+        self.dv = params.g*np.array([0.0, 0.0, 1.0]) - \
             self.pose@self.f/params.m
         self.domega = params.inertia_inv@(self.torque -
                                           utils.get_hat_map(self.omega)@params.inertia@self.omega)
