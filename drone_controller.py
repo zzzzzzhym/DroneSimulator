@@ -21,12 +21,13 @@ class DroneController:
         self.omega_desired_dot = np.array([0.0, 0.0, 0.0])
         self.b_3d = np.array([0.0, 0.0, 0.0])
         self.b_2d = np.array([0.0, 0.0, 0.0])
-        self.f = np.array([0.0, 0.0, 0.0])
+        self.f = np.array([0.0, 0.0, 0.0])  # same convention as the paper
         self.f_dot = np.array([0.0, 0.0, 0.0])
         self.torque = np.array([0.0, 0.0, 0.0])
         self.f_d = np.array([0.0, 0.0, 0.0])    # desired force in inertial frame
         self.f_d_dot = np.array([0.0, 0.0, 0.0])
         self.psi_r_rd = 0.0 # debug use only
+        self.force_motor = np.array([0.0, 0.0, 0.0, 0.0])
 
     def step_controller(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference):
         self.step_tracking_error(state, ref)
@@ -36,6 +37,7 @@ class DroneController:
         self.step_attitude_error(state)
         self.step_attitude_control(state)
         self.step_error_function_so3(state)
+        self.step_motor_force()
 
     def step_desired_force(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference):
         """
@@ -123,7 +125,9 @@ class DroneController:
         self.psi_r_rd = 0.5*(1 - self.pose_desired[:,0]@state.pose[:,0] +
                         1 - self.pose_desired[:,1]@state.pose[:,1] +
                         1 - self.pose_desired[:,2]@state.pose[:,2])
-        
+    
+    def step_motor_force(self):
+        self.force_motor = params.m_thrust_to_fm_inv@np.hstack((self.f[2], self.torque))
 
 
 if __name__ == "__main__":

@@ -15,8 +15,8 @@ class DroneSimulator:
     def __init__(self) -> None:
         self.t = 0.0
         self.dt = 0.01
-        self.dc_ratio = 10 # dynamics steps per controller step, must be an integer
-        self.cl_ratio = 100 # controller steps per log step, must be an integer
+        self.dc_ratio = 5 # dynamics steps per controller step, must be an integer
+        self.cl_ratio = 1 # controller steps per log step, must be an integer
         self.dt_controller = self.dt/self.cl_ratio
         self.dt_dynamics = self.dt_controller/self.dc_ratio
         self.sim_trajectory = trajectory.SpiralAndSpin()
@@ -51,6 +51,8 @@ class DroneSimulator:
         self.v_d_trace = np.empty((0, 3))
         self.x_d_dot2_trace = np.empty((0, 3))
         self.x_d_dot3_trace = np.empty((0, 3))
+        self.f_motor_trace = np.empty((0, 4))
+        self.omega_desired_trace = np.empty((0, 3)) # inertial frame
         self.pose_trace = []
         self.pose_desired_trace = []
         self.pose_desired_dot_trace = []
@@ -109,6 +111,10 @@ class DroneSimulator:
                 (self.x_d_dot2_trace, self.sim_trajectory.x_d_dot2))
             self.x_d_dot3_trace = np.vstack(
                 (self.x_d_dot3_trace, self.sim_trajectory.x_d_dot3))
+            self.f_motor_trace = np.vstack(
+                (self.f_motor_trace, self.sim_controller.force_motor))
+            self.omega_desired_trace = np.vstack(
+                (self.omega_desired_trace, self.sim_controller.omega_desired))
             self.pose_trace.append(self.sim_dynamics.pose)
             self.pose_desired_trace.append(self.sim_controller.pose_desired)
             self.pose_desired_dot_trace.append(self.sim_controller.pose_desired_dot)
@@ -118,13 +124,15 @@ class DroneSimulator:
         self.pose_desired_dot_trace = np.array(self.pose_desired_dot_trace)
         self.pose_desired_dot2_trace = np.array(self.pose_desired_dot2_trace)
         self.plot_position_and_derivatives()
-        self.plot_trajectory()
+        # self.plot_trajectory()
         self.plot_force_and_torque()
         self.plot_position_tracking_error()
         self.plot_pose_tracking_error()
         self.plot_desired_force()
         self.plot_force()
         self.plot_pose_desired()
+        self.plot_omega_desired()
+        self.plot_motor_force()
         
         self.plot_3d_trace()
         plt.show()
@@ -371,6 +379,21 @@ class DroneSimulator:
         axs3[1, 2].plot(t_diff, pose_desired_dot_diff[:, 1, 2], marker='.')
         axs3[2, 2].plot(t_diff, pose_desired_dot_diff[:, 2, 2], marker='.') 
 
+    def plot_motor_force(self):
+        fig, axs = plt.subplots(4, 1, sharex=True)
+        fig.suptitle('motor force')
+        axs[0].plot(self.t_span, self.f_motor_trace[:, 0], marker='x')
+        axs[1].plot(self.t_span, self.f_motor_trace[:, 1], marker='x')
+        axs[2].plot(self.t_span, self.f_motor_trace[:, 2], marker='x')
+        axs[3].plot(self.t_span, self.f_motor_trace[:, 3], marker='x')   
+
+    def plot_omega_desired(self):
+        fig, axs = plt.subplots(3, 1, sharex=True)
+        fig.suptitle('omega_desired')
+        axs[0].plot(self.t_span, self.omega_desired_trace[:, 0], marker='x')
+        axs[1].plot(self.t_span, self.omega_desired_trace[:, 1], marker='x')
+        axs[2].plot(self.t_span, self.omega_desired_trace[:, 2], marker='x')
+
     def plot_3d_trace(self):
         fig9, axs9 = plt.subplots(1, 1, sharex=True)
         # Use projection='3d' for 3D plots
@@ -431,4 +454,4 @@ def prepare_drone_pose_plot(position: np.array, pose: np.array) -> (np.array, np
 
 if __name__ == "__main__":
     sim_test = DroneSimulator()
-    sim_test.run_simulation(10.0)
+    sim_test.run_simulation(0.1)
