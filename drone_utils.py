@@ -53,6 +53,35 @@ def get_signal_derivative(t: np.ndarray, v: np.ndarray, dt) -> (np.ndarray, np.n
         print("Warning: get_signal_derivative: input dimension not in range, which is ", dim)
     return t_dv, dv
 
+
+def get_quaternion_from_angular_displacement(angle_3d: np.ndarray) -> quaternion.quaternion:
+    theta = np.sqrt(angle_3d@angle_3d)
+    result = np.quaternion()
+    result.real = np.cos(0.5*theta)
+    result.imag = 0.5*np.sinc(0.5*theta/np.pi)*angle_3d
+    return result
+
+
+def convert_vector_to_quaternion(vector_3d: np.ndarray) -> quaternion.quaternion:
+    result = np.quaternion()
+    result.imag = vector_3d
+    return result
+
+
+def convert_quaternion_to_vector(quat: quaternion.quaternion) -> np.ndarray:
+    result = quat.imag
+    if quat.real > 0.000001:
+        print(
+            'Warning: rotation_updater: quaternion to vector conversion, non-zero quaternion real part is', quat.real)
+    return result
+
+
+def normalize_rotation_matrix(self):
+    for i in range(self.rotation_matrix.shape[1]):
+        self.rotation_matrix[:, i] = self.rotation_matrix[:, i] / \
+            np.sqrt(self.rotation_matrix[:, i]@self.rotation_matrix[:, i])
+
+
 if __name__ == "__main__":
     v_test = np.array([1, 2, 3])
     m_test = get_hat_map(v_test)
