@@ -3,14 +3,6 @@ import matplotlib.pyplot as plt     # test only
 from mpl_toolkits import mplot3d    # test only
 
 
-class TrajectoryGenerator:
-    def __init__(self) -> None:
-        pass
-
-    def get_trajectory(self):
-        pass
-
-
 class TrajectoryReference:
     def __init__(self) -> None:
         self.init_x = np.array([0.0, 0.0, 0.0])
