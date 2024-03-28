@@ -20,18 +20,37 @@ trajecotry = trajectory_generator.TrajectoryGenerator(config, waypoints)
 
 
 if __name__ == "__main__":
+    '''
+    x = t
+    y = t
+    z = 0
+    '''
     trajecotry.section_position_polynomials[0][0][1] = 1
     trajecotry.section_position_polynomials[0][1][1] = 1
     trajecotry.section_position_polynomials[1][0][1] = 1
     trajecotry.section_position_polynomials[1][1][1] = 1
-    # print(trajecotry.section_position_polynomials)
 
+    '''
+    constraint check
+    '''
     # result = trajecotry.get_reach_waypoint_constraint(trajecotry.section_position_polynomials[1], 0)
     # print(result)
     # result = trajecotry.get_continuity_constraint(trajecotry.section_position_polynomials[1])
     # print(result)
-    result = trajecotry.get_equality_constraint(trajecotry.section_position_polynomials[1], 1)
-    print(result)
-
-    # trajecotry.get_trajectory()
+    # result = trajecotry.get_equality_constraint(trajecotry.section_position_polynomials[1], 1)
+    # print(result)
+    
+    '''
+    cost function check
+    '''
+    # trajecotry.section_position_polynomials[0][0][4] = 1
     # print(trajecotry.section_position_polynomials)
+    # result = trajecotry.get_cost_of_all_sections(trajecotry.section_position_polynomials[0])
+    # print(result)
+    
+    '''
+    optimization check
+    '''
+    trajecotry.get_trajectory()
+    print(trajecotry.section_position_polynomials)
+

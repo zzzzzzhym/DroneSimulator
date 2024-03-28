@@ -95,15 +95,12 @@ class TrajectoryGenerator:
             velocity_polynomials[i_section] = differantiate_polynomial(position_polynomials[i_section], 1)
             acceleration_polynomials[i_section] = differantiate_polynomial(velocity_polynomials[i_section], 1)
         constraint_delta_0 = self.get_reach_waypoint_constraint(position_polynomials, i_dim)
-        if self.waypoints.number_of_sections < 2:
-            constraint_delta = constraint_delta_0
-        else:
-            constraint_delta_1_0 = self.get_continuity_constraint(position_polynomials)
-            constraint_delta_1_1 = self.get_continuity_constraint(velocity_polynomials)
-            constraint_delta_1_2 = self.get_continuity_constraint(acceleration_polynomials)
-            constraint_delta = np.append(constraint_delta_0, constraint_delta_1_0)
-            constraint_delta = np.append(constraint_delta, constraint_delta_1_1)
-            constraint_delta = np.append(constraint_delta, constraint_delta_1_2)
+        constraint_delta_1_0 = self.get_continuity_constraint(position_polynomials)
+        constraint_delta_1_1 = self.get_continuity_constraint(velocity_polynomials)
+        constraint_delta_1_2 = self.get_continuity_constraint(acceleration_polynomials)
+        constraint_delta = np.append(constraint_delta_0, constraint_delta_1_0)
+        constraint_delta = np.append(constraint_delta, constraint_delta_1_1)
+        constraint_delta = np.append(constraint_delta, constraint_delta_1_2)
         return constraint_delta
 
     def get_reach_waypoint_constraint(self, polynomials, i_dim) -> np.ndarray:
@@ -116,12 +113,13 @@ class TrajectoryGenerator:
         return reshaped_result
     
     def get_continuity_constraint(self, polynomials) -> np.ndarray:
-        result = np.empty(self.waypoints.number_of_waypoints)
+        combined_result = np.empty((0, ))
         for i in range(self.waypoints.number_of_sections - 1):
             # protection: range(0) and range(-1) will skip this loop
-            result[i] = sample_polynomial(polynomials[i], self.waypoints.section_time_stamp[i]) - \
-                        sample_polynomial(polynomials[i+1], self.waypoints.section_time_stamp[i])
-        return result
+            result = sample_polynomial(polynomials[i], self.waypoints.section_time_stamp[i]) - \
+                     sample_polynomial(polynomials[i+1], self.waypoints.section_time_stamp[i])
+            combined_result = np.append(combined_result, result)
+        return combined_result
 
 
 def differantiate_polynomial(polynomial: np.ndarray, order_of_derivative: int) -> np.ndarray:
