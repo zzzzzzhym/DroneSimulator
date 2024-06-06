@@ -23,9 +23,9 @@ def get_total_time_invariant_vectors(number_of_sections: int) -> np.ndarray:
     return vectors
 
 def get_total_cost(waypoints: waypoint.Waypoint, config: trajectory_config.TrajectoryConfig):
-    trajecotry = trajectory_generator_qp.TrajectoryGenerator(config, waypoints)
-    trajecotry.get_trajectory()
-    return np.sum(trajecotry.cost) 
+    trajectory = trajectory_generator_qp.TrajectoryGenerator(config, waypoints)
+    trajectory.get_trajectory()
+    return np.sum(trajectory.cost) 
 
 def get_directional_derivative(waypoints: waypoint.Waypoint, config: trajectory_config.TrajectoryConfig, vector_trial: np.ndarray, base_cost) -> np.ndarray:
     step_size = 0.1
@@ -44,6 +44,15 @@ def get_all_directional_derivatives(waypoints: waypoint.Waypoint, config: trajec
     return directional_derivatives
 
 def optimize_time_distribution(waypoints: waypoint.Waypoint, config: trajectory_config.TrajectoryConfig):
+    """backtracking line search to find optimal section time, the algorithm stops on hitting constraint or max iteration
+
+    Args:
+        waypoints (waypoint.Waypoint): _description_
+        config (trajectory_config.TrajectoryConfig): _description_
+
+    Returns:
+        _type_: _description_
+    """
     step_size = 1
     max_steps = 20
     alpha = 0.5
@@ -74,10 +83,19 @@ def optimize_time_distribution(waypoints: waypoint.Waypoint, config: trajectory_
     return new_waypoints
 
 def find_trajectory_with_optimal_time(waypoints: waypoint.Waypoint, config: trajectory_config.TrajectoryConfig) -> tuple[waypoint.Waypoint, trajectory_generator_qp.TrajectoryGenerator]:
+    """entry point to optimize trajectory time distribution in all sections
+
+    Args:
+        waypoints (waypoint.Waypoint): _description_
+        config (trajectory_config.TrajectoryConfig): _description_
+
+    Returns:
+        tuple[waypoint.Waypoint, trajectory_generator_qp.TrajectoryGenerator]: _description_
+    """
     new_waypoints = optimize_time_distribution(waypoints, config)
-    new_trajecotry = trajectory_generator_qp.TrajectoryGenerator(config, new_waypoints)
-    new_trajecotry.get_trajectory()
-    return new_waypoints, new_trajecotry
+    new_trajectory = trajectory_generator_qp.TrajectoryGenerator(config, new_waypoints)
+    new_trajectory.get_trajectory()
+    return new_waypoints, new_trajectory
 
 
 if __name__ == "__main__":
@@ -94,12 +112,12 @@ if __name__ == "__main__":
     end_acceleration = np.array([0,0,0])
     config = trajectory_config.TrajectoryConfig(5, init_velocity, init_acceleration, end_velocity, end_acceleration)
 
-    new_waypoints, new_trajecotry = find_trajectory_with_optimal_time(waypoints, config)
-    new_trajecotry.plot_trajectory()
+    new_waypoints, new_trajectory = find_trajectory_with_optimal_time(waypoints, config)
+    new_trajectory.plot_trajectory()
 
-    trajecotry = trajectory_generator_qp.TrajectoryGenerator(config, waypoints)
-    trajecotry.get_trajectory()
-    trajecotry.plot_trajectory()
+    trajectory = trajectory_generator_qp.TrajectoryGenerator(config, waypoints)
+    trajectory.get_trajectory()
+    trajectory.plot_trajectory()
     plt.show()
 
     print('original section time: ')
