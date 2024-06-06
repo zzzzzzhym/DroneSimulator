@@ -11,15 +11,15 @@ import copy
 
 import trajectory_config
 import waypoint
-import polonomial
+import polynomial
 
 
 solver_collection = {'cvxopt', 'cvxpy', 'qpfunction'}
-which_solver = 'qpfunction'
+which_solver = 'cvxopt'
 
 class UnitCoeffPolynomialUtils:
     def __init__(self, order_of_polynomial: int) -> None:
-        self.position = polonomial.Polynomial(np.ones(order_of_polynomial + 1), 4)
+        self.position = polynomial.Polynomial(np.ones(order_of_polynomial + 1), 4)
 
 class TrajectoryGenerator:
     '''
@@ -27,7 +27,10 @@ class TrajectoryGenerator:
         position_profiles: position_profiles[dim][section_num][coeff]
                            dim is dimension index of (x, y ,z). 
                            section_num is a section id.
-                           coeff is the coefficient of polynomial from 0 to n-1
+                           coeff is the coefficient of polynomial from 0 to n-1,
+                           namely p_0, p_1 ... p_{n-1}
+                           the corrsponding polynomial profile is 
+                           p_0 + p_1*(t - t_i) + ... p_{n-1}*(t-t_i)^(n-1)
     '''
     def __init__(self, config: trajectory_config.TrajectoryConfig, waypoints: waypoint.Waypoint) -> None:
         self.config = config
@@ -38,9 +41,12 @@ class TrajectoryGenerator:
         self.position_profiles = np.zeros((3, self.waypoints.number_of_sections, self.number_of_polynimial_terms))
         self.profiles = []
         self.cost = np.array([-1, -1, -1])
-        
+        self.time_shift = self.get_time_shift(self.waypoints)
         # private utils
         self.coeffUtils = UnitCoeffPolynomialUtils(self.config.order_of_polynomial)
+
+    def get_time_shift(self, waypoints: waypoint.Waypoint):
+        return waypoints.waypoint_time_stamp[:-1]
 
     def initialize_profiles(self):
         """for each dimension, initialize the polynomial to a linear profile connect adjacent waypoints
@@ -67,7 +73,7 @@ class TrajectoryGenerator:
         for component in [0, 1, 2]:
             sub_list = []
             for position_polynomial in position_profiles[component]:
-                profile = polonomial.Polynomial(position_polynomial, 2)
+                profile = polynomial.Polynomial(position_polynomial, 2)
                 sub_list.append(profile)
             self.profiles.append(sub_list)
 
@@ -88,6 +94,8 @@ class TrajectoryGenerator:
         1/2*x.T*Q*x + p*x
         q: Q
         p: p
+        Q = diag([q_sub_0, q_sub_1, ...])
+        q_sub_i = 
 
         Returns:
             tuple[np.ndarray, np.ndarray]: _description_
@@ -100,7 +108,7 @@ class TrajectoryGenerator:
                 for col in range(self.number_of_polynimial_terms):
                     if (row >= derivative) and (col >= derivative):
                         q_sub[row, col] = (np.prod(range(row, row - derivative, -1))*np.prod(range(col, col - derivative, -1))/(row + col - 2*derivative + 1))* \
-                            (self.waypoints.waypoint_time_stamp[i+1]**(row + col - 2*derivative + 1) - self.waypoints.waypoint_time_stamp[i]**(row + col - 2*derivative + 1))
+                            (self.waypoints.waypoint_time_stamp[i+1]- self.waypoints.waypoint_time_stamp[i])**(row + col - 2*derivative + 1)
             q = block_diag(q, q_sub)
         p = np.zeros(self.waypoints.number_of_sections*(self.config.order_of_polynomial + 1))     
         return q, p
@@ -130,49 +138,57 @@ class TrajectoryGenerator:
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, 0)))
         b = np.append(b, init_acceleration_component)
         # terminal state
-        coeff = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.waypoint_time_stamp[-1])
+        # position
+        coeff = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, self.waypoints.number_of_sections - 1)))
-        b = np.append(b, component_of_waypoints[-1])        
-        coeff = self.coeffUtils.position.get_lumped_coefficient(1, self.waypoints.waypoint_time_stamp[-1])
+        b = np.append(b, component_of_waypoints[-1])  
+        # velocity      
+        coeff = self.coeffUtils.position.get_lumped_coefficient(1, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, self.waypoints.number_of_sections - 1)))
         b = np.append(b, end_velocity_component)
-        coeff = self.coeffUtils.position.get_lumped_coefficient(2, self.waypoints.waypoint_time_stamp[-1])
+        # accel
+        coeff = self.coeffUtils.position.get_lumped_coefficient(2, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, self.waypoints.number_of_sections - 1)))
         b = np.append(b, end_acceleration_component)
 
         # continuity constraint (position)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.waypoint_time_stamp[section_index+1])
+            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.section_time[section_index])   # left hand side coeff
+            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(0, 0) # right hand side coeff
             a = np.vstack((a, 
-                           self.load_row_of_a(row_length_of_a, coeff, section_index) + self.load_row_of_a(row_length_of_a, -coeff, section_index+1)
+                           self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
             b = np.append(b, 0.0)        
         # continuity constraint (velocity)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff = self.coeffUtils.position.get_lumped_coefficient(1, self.waypoints.waypoint_time_stamp[section_index+1])
+            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(1, self.waypoints.section_time[section_index])
+            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(1, 0)
             a = np.vstack((a, 
-                           self.load_row_of_a(row_length_of_a, coeff, section_index) + self.load_row_of_a(row_length_of_a, -coeff, section_index+1)
+                           self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
             b = np.append(b, 0.0)
         # continuity constraint (acceleration)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff = self.coeffUtils.position.get_lumped_coefficient(2, self.waypoints.waypoint_time_stamp[section_index+1])
+            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(2, self.waypoints.section_time[section_index])
+            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(2, 0)
             a = np.vstack((a, 
-                           self.load_row_of_a(row_length_of_a, coeff, section_index) + self.load_row_of_a(row_length_of_a, -coeff, section_index+1)
+                           self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
             b = np.append(b, 0.0)        
         # continuity constraint (jerk)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff = self.coeffUtils.position.get_lumped_coefficient(3, self.waypoints.waypoint_time_stamp[section_index+1])
+            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(3, self.waypoints.section_time[section_index])
+            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(3, 0)
             a = np.vstack((a, 
-                           self.load_row_of_a(row_length_of_a, coeff, section_index) + self.load_row_of_a(row_length_of_a, -coeff, section_index+1)
+                           self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
             b = np.append(b, 0.0)        
         # continuity constraint (snap)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff = self.coeffUtils.position.get_lumped_coefficient(4, self.waypoints.waypoint_time_stamp[section_index+1])
+            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(4, self.waypoints.section_time[section_index])
+            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(4, 0)
             a = np.vstack((a, 
-                           self.load_row_of_a(row_length_of_a, coeff, section_index) + self.load_row_of_a(row_length_of_a, -coeff, section_index+1)
+                           self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
             b = np.append(b, 0.0)        
         return a, b
@@ -184,7 +200,7 @@ class TrajectoryGenerator:
         h = np.empty((0,))
         # waypoint corridor constraint 
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.waypoint_time_stamp[section_index + 1]) # polynomial(t_i) < p_i + corridor_width
+            coeff = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.section_time[section_index]) # polynomial(t_i - t_{i-1}) < p_i + corridor_width
             new_row_of_g = self.load_row_of_a(row_length_of_g, coeff, section_index)
             g = np.vstack((g, new_row_of_g))
             h = np.append(h, component_of_waypoints[section_index + 1] + self.corridor_width)
@@ -293,9 +309,9 @@ class TrajectoryGenerator:
             y = np.empty((0,))
             z = np.empty((0,))
             for t in t_samples:
-                x = np.append(x, self.profiles[0][i].sample_polynomial(0, t))
-                y = np.append(y, self.profiles[1][i].sample_polynomial(0, t))
-                z = np.append(z, self.profiles[2][i].sample_polynomial(0, t))
+                x = np.append(x, self.profiles[0][i].sample_polynomial(0, t - self.time_shift[i]))
+                y = np.append(y, self.profiles[1][i].sample_polynomial(0, t - self.time_shift[i]))
+                z = np.append(z, self.profiles[2][i].sample_polynomial(0, t - self.time_shift[i]))
             axs.plot3D(x,y,z)
             axs2.plot(x,y)
         axs.plot3D(self.waypoints.coordinates[:, 0],
@@ -323,9 +339,9 @@ class TrajectoryGenerator:
             y = np.empty((0,))
             z = np.empty((0,))
             for t in t_samples:
-                x = np.append(x, self.profiles[0][i].sample_polynomial(1, t))
-                y = np.append(y, self.profiles[1][i].sample_polynomial(1, t))
-                z = np.append(z, self.profiles[2][i].sample_polynomial(1, t))
+                x = np.append(x, self.profiles[0][i].sample_polynomial(1, t - self.time_shift[i]))
+                y = np.append(y, self.profiles[1][i].sample_polynomial(1, t - self.time_shift[i]))
+                z = np.append(z, self.profiles[2][i].sample_polynomial(1, t - self.time_shift[i]))
             axs3[0, 0].plot(t_samples, x)
             axs3[1, 0].plot(t_samples, y)
             axs3[2, 0].plot(t_samples, z)
@@ -333,9 +349,9 @@ class TrajectoryGenerator:
             y = np.empty((0,))
             z = np.empty((0,))
             for t in t_samples:
-                x = np.append(x, self.profiles[0][i].sample_polynomial(2, t))
-                y = np.append(y, self.profiles[1][i].sample_polynomial(2, t))
-                z = np.append(z, self.profiles[2][i].sample_polynomial(2, t))
+                x = np.append(x, self.profiles[0][i].sample_polynomial(2, t - self.time_shift[i]))
+                y = np.append(y, self.profiles[1][i].sample_polynomial(2, t - self.time_shift[i]))
+                z = np.append(z, self.profiles[2][i].sample_polynomial(2, t - self.time_shift[i]))
             axs3[0, 1].plot(t_samples, x)
             axs3[1, 1].plot(t_samples, y)
             axs3[2, 1].plot(t_samples, z)
