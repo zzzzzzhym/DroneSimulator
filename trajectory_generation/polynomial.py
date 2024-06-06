@@ -29,8 +29,8 @@ class Polynomial:
         '''
         return self.induced_coeff[order_of_derivative]*(x**self.order_of_terms[order_of_derivative])
 
-    def differantiate_polynomial(self, order_of_terms, order_of_derivative: int) -> tuple[np.ndarray, np.ndarray]:
-        """take dirivative of a polynomial
+    def differentiate_polynomial(self, order_of_terms, order_of_derivative: int) -> tuple[np.ndarray, np.ndarray]:
+        """take derivative of a polynomial
 
         Args:
             order_of_derivative (int): -
@@ -42,14 +42,14 @@ class Polynomial:
         induced_coeffs = np.zeros(self.number_of_terms)
         if self.number_of_terms - order_of_derivative >= 0:
             for i, order in enumerate(order_of_terms):
-                new_order_of_terms[i], induced_coeffs[i] = differantiate_monomial(order, order_of_derivative)
+                new_order_of_terms[i], induced_coeffs[i] = differentiate_monomial(order, order_of_derivative)
         return new_order_of_terms, induced_coeffs
 
     def get_differentiation_induced_coefficient(self, order_of_derivative: int) -> np.ndarray:
         induced_coeff_vector = np.zeros(self.number_of_terms)
         if self.number_of_terms - order_of_derivative >= 0:
             for i in range(order_of_derivative, self.number_of_terms, 1):
-                new_order, coefficient = differantiate_monomial(i, order_of_derivative)
+                new_order, coefficient = differentiate_monomial(i, order_of_derivative)
                 induced_coeff_vector[new_order] = coefficient
         return induced_coeff_vector        
 
@@ -63,13 +63,13 @@ class Polynomial:
         '''
         increment the derivatives of the object
         '''
-        new_order_of_terms, new_induced_coeff = self.differantiate_polynomial(self.order_of_terms[-1], 1)
+        new_order_of_terms, new_induced_coeff = self.differentiate_polynomial(self.order_of_terms[-1], 1)
         self.order_of_terms = np.vstack((self.order_of_terms, new_order_of_terms))
         self.induced_coeff = np.vstack((self.induced_coeff, self.induced_coeff[-1]*new_induced_coeff))
         self.computed_order_of_derivative += 1
 
 
-def differantiate_monomial(order_of_monomial: int, order_of_derivative: int) -> tuple[int, int]:
+def differentiate_monomial(order_of_monomial: int, order_of_derivative: int) -> tuple[int, int]:
     """calculate i^th order of t^n
 
     Args:
@@ -92,10 +92,10 @@ def differantiate_monomial(order_of_monomial: int, order_of_derivative: int) -> 
 if __name__ == "__main__":
 
     # x^3 2th derivative to be 6x
-    diff_order, coeff = differantiate_monomial(3, 2)
+    diff_order, coeff = differentiate_monomial(3, 2)
     print(diff_order, coeff)
     # x^3 3th derivative to be 6
-    diff_order, coeff = differantiate_monomial(3, 3)
+    diff_order, coeff = differentiate_monomial(3, 3)
     print(diff_order, coeff)
     
     # 3+x+x^2+2*x^3 2nd derivative 0+0+2+12x

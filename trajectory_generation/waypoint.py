@@ -2,6 +2,7 @@ import numpy as np
 
 
 class Waypoint:
+    """Key frames on the trajectory"""
     def __init__(self, coordinate_list: np.ndarray, total_time: float) -> None:
         '''
         self.section_time: a vector of m element, the i^th element is the i^th section time span
