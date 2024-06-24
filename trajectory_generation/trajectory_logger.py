@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 
 import trajectory_config
 import trajectory_generator_qp as trajectory_generator
@@ -8,7 +9,7 @@ import waypoint_generator
 
 
 section_time_span = 1.0
-number_of_points = 10
+number_of_points = 5
 point_to_point_distance = 1.0
 
 waypoint_generator_instance = waypoint_generator.WaypointGenerator(point_to_point_distance, 
@@ -28,15 +29,24 @@ waypoints, trajectory = trajectory_time_optimizer.find_trajectory_with_optimal_t
 print('after opt')
 print(waypoints.section_time)
 
+def write_trajectory_to_csv(trajectory: trajectory_generator.TrajectoryGenerator) -> None:
+    """Write trajectory information into a csv"""
+
+
 
 if __name__ == "__main__":
     '''
     optimization check
     '''
-    with open('waypoint_list.csv', 'w') as file:
-        print(waypoints.coordinates, file=file)
-    # print(trajectory.position_profiles)
     trajectory.plot_trajectory()
-    plt.show()
+    write_trajectory_to_csv(trajectory)
+    with open('trajectory.pkl', 'wb') as file:
+        pickle.dump(trajectory, file)
+    # plt.show()
     
-
+    """To load file, use the following code
+    with open('trajectory.pkl', 'rb') as file:
+    # Deserialize each object from the file
+        loaded_trajectory = pickle.load(file)
+    loaded_trajectory.plot_trajectory()
+    """

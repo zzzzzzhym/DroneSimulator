@@ -29,7 +29,7 @@ class TrajectoryGenerator:
                            section_num is a section id.
                            coeff is the coefficient of polynomial from 0 to n-1,
                            namely p_0, p_1 ... p_{n-1}
-                           the corrsponding polynomial profile is 
+                           the corresponding polynomial profile is 
                            p_0 + p_1*(t - t_i) + ... p_{n-1}*(t-t_i)^(n-1)
     '''
     def __init__(self, config: trajectory_config.TrajectoryConfig, waypoints: waypoint.Waypoint) -> None:
@@ -37,13 +37,13 @@ class TrajectoryGenerator:
         self.waypoints = copy.deepcopy(waypoints)
         self.corridor_width = 0.01
         # self.waypoints.insert_middle_waypoints(self.corridor_width)
-        self.number_of_polynimial_terms = self.config.order_of_polynomial + 1
-        self.position_profiles = np.zeros((3, self.waypoints.number_of_sections, self.number_of_polynimial_terms))
+        self.number_of_polynomial_terms = self.config.order_of_polynomial + 1
+        self.position_profiles = np.zeros((3, self.waypoints.number_of_sections, self.number_of_polynomial_terms))
         self.profiles = []
         self.cost = np.array([-1, -1, -1])
         self.time_shift = self.get_time_shift(self.waypoints)
         # private utils
-        self.coeffUtils = UnitCoeffPolynomialUtils(self.config.order_of_polynomial)
+        self.coeff_utils = UnitCoeffPolynomialUtils(self.config.order_of_polynomial)
 
     def get_time_shift(self, waypoints: waypoint.Waypoint):
         return waypoints.waypoint_time_stamp[:-1]
@@ -77,8 +77,8 @@ class TrajectoryGenerator:
                 sub_list.append(profile)
             self.profiles.append(sub_list)
 
-    def pack_component_profile_to_vector(self, polynimial: np.ndarray) -> np.ndarray:
-        result = np.reshape(polynimial, -1)
+    def pack_component_profile_to_vector(self, polynomial: np.ndarray) -> np.ndarray:
+        result = np.reshape(polynomial, -1)
         return result
 
     def unpack_vector_to_component_profile(self, var_vector: np.ndarray) -> np.ndarray:
@@ -103,9 +103,9 @@ class TrajectoryGenerator:
         derivative = 4
         q = np.empty((0,0))
         for i in range(self.waypoints.number_of_sections):
-            q_sub = np.zeros((self.number_of_polynimial_terms, self.number_of_polynimial_terms))
-            for row in range(self.number_of_polynimial_terms):
-                for col in range(self.number_of_polynimial_terms):
+            q_sub = np.zeros((self.number_of_polynomial_terms, self.number_of_polynomial_terms))
+            for row in range(self.number_of_polynomial_terms):
+                for col in range(self.number_of_polynomial_terms):
                     if (row >= derivative) and (col >= derivative):
                         q_sub[row, col] = (np.prod(range(row, row - derivative, -1))*np.prod(range(col, col - derivative, -1))/(row + col - 2*derivative + 1))* \
                             (self.waypoints.waypoint_time_stamp[i+1]- self.waypoints.waypoint_time_stamp[i])**(row + col - 2*derivative + 1)
@@ -128,65 +128,65 @@ class TrajectoryGenerator:
         b = np.empty((0,))
         # initial state and terminal state constraint
         # initial state
-        coeff = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.waypoint_time_stamp[0]) # polynomial(t0) = p0 similar below
+        coeff = self.coeff_utils.position.get_lumped_coefficient(0, self.waypoints.waypoint_time_stamp[0]) # polynomial(t0) = p0 similar below
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, 0)))
         b = np.append(b, component_of_waypoints[0])
-        coeff = self.coeffUtils.position.get_lumped_coefficient(1, self.waypoints.waypoint_time_stamp[0])
+        coeff = self.coeff_utils.position.get_lumped_coefficient(1, self.waypoints.waypoint_time_stamp[0])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, 0)))
         b = np.append(b, init_velocity_component)
-        coeff = self.coeffUtils.position.get_lumped_coefficient(2, self.waypoints.waypoint_time_stamp[0])
+        coeff = self.coeff_utils.position.get_lumped_coefficient(2, self.waypoints.waypoint_time_stamp[0])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, 0)))
         b = np.append(b, init_acceleration_component)
         # terminal state
         # position
-        coeff = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
+        coeff = self.coeff_utils.position.get_lumped_coefficient(0, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, self.waypoints.number_of_sections - 1)))
         b = np.append(b, component_of_waypoints[-1])  
         # velocity      
-        coeff = self.coeffUtils.position.get_lumped_coefficient(1, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
+        coeff = self.coeff_utils.position.get_lumped_coefficient(1, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, self.waypoints.number_of_sections - 1)))
         b = np.append(b, end_velocity_component)
         # accel
-        coeff = self.coeffUtils.position.get_lumped_coefficient(2, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
+        coeff = self.coeff_utils.position.get_lumped_coefficient(2, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, self.waypoints.number_of_sections - 1)))
         b = np.append(b, end_acceleration_component)
 
         # continuity constraint (position)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.section_time[section_index])   # left hand side coeff
-            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(0, 0) # right hand side coeff
+            coeff_lh = self.coeff_utils.position.get_lumped_coefficient(0, self.waypoints.section_time[section_index])   # left hand side coeff
+            coeff_rh = self.coeff_utils.position.get_lumped_coefficient(0, 0) # right hand side coeff
             a = np.vstack((a, 
                            self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
             b = np.append(b, 0.0)        
         # continuity constraint (velocity)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(1, self.waypoints.section_time[section_index])
-            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(1, 0)
+            coeff_lh = self.coeff_utils.position.get_lumped_coefficient(1, self.waypoints.section_time[section_index])
+            coeff_rh = self.coeff_utils.position.get_lumped_coefficient(1, 0)
             a = np.vstack((a, 
                            self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
             b = np.append(b, 0.0)
         # continuity constraint (acceleration)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(2, self.waypoints.section_time[section_index])
-            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(2, 0)
+            coeff_lh = self.coeff_utils.position.get_lumped_coefficient(2, self.waypoints.section_time[section_index])
+            coeff_rh = self.coeff_utils.position.get_lumped_coefficient(2, 0)
             a = np.vstack((a, 
                            self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
             b = np.append(b, 0.0)        
         # continuity constraint (jerk)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(3, self.waypoints.section_time[section_index])
-            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(3, 0)
+            coeff_lh = self.coeff_utils.position.get_lumped_coefficient(3, self.waypoints.section_time[section_index])
+            coeff_rh = self.coeff_utils.position.get_lumped_coefficient(3, 0)
             a = np.vstack((a, 
                            self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
             b = np.append(b, 0.0)        
         # continuity constraint (snap)
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff_lh = self.coeffUtils.position.get_lumped_coefficient(4, self.waypoints.section_time[section_index])
-            coeff_rh = self.coeffUtils.position.get_lumped_coefficient(4, 0)
+            coeff_lh = self.coeff_utils.position.get_lumped_coefficient(4, self.waypoints.section_time[section_index])
+            coeff_rh = self.coeff_utils.position.get_lumped_coefficient(4, 0)
             a = np.vstack((a, 
                            self.load_row_of_a(row_length_of_a, coeff_lh, section_index) + self.load_row_of_a(row_length_of_a, -coeff_rh, section_index+1)
                            ))
@@ -200,7 +200,7 @@ class TrajectoryGenerator:
         h = np.empty((0,))
         # waypoint corridor constraint 
         for section_index in range(self.waypoints.number_of_sections - 1):
-            coeff = self.coeffUtils.position.get_lumped_coefficient(0, self.waypoints.section_time[section_index]) # polynomial(t_i - t_{i-1}) < p_i + corridor_width
+            coeff = self.coeff_utils.position.get_lumped_coefficient(0, self.waypoints.section_time[section_index]) # polynomial(t_i - t_{i-1}) < p_i + corridor_width
             new_row_of_g = self.load_row_of_a(row_length_of_g, coeff, section_index)
             g = np.vstack((g, new_row_of_g))
             h = np.append(h, component_of_waypoints[section_index + 1] + self.corridor_width)

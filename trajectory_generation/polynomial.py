@@ -20,8 +20,7 @@ class Polynomial:
         self.order_of_terms = np.array([range(self.number_of_terms)])
         self.induced_coeff = np.ones((1, self.number_of_terms))
         self.computed_order_of_derivative = 0
-        for _ in range(order_of_derivative):
-            self.extend_derivatives()
+        self.extend_to_derivative_order(order_of_derivative)
 
     def get_lumped_coefficient(self, order_of_derivative: int, x: float):
         '''
@@ -68,25 +67,29 @@ class Polynomial:
         self.induced_coeff = np.vstack((self.induced_coeff, self.induced_coeff[-1]*new_induced_coeff))
         self.computed_order_of_derivative += 1
 
+    def extend_to_derivative_order(self, order: int):
+        for _ in range(self.computed_order_of_derivative, order):
+            self.extend_derivatives()
+
 
 def differentiate_monomial(order_of_monomial: int, order_of_derivative: int) -> tuple[int, int]:
     """calculate i^th order of t^n
 
     Args:
         order_of_monomial (int): n
-        order_of_derivative (int): number of attempts to differantiate
+        order_of_derivative (int): number of attempts to differentiate
 
     Returns:
-        tuple[int, int]: differantiated_order, coefficient
-        differantiated_order: order of monomial after differantiation
-        coefficient: coefficient generated from differantiation
+        tuple[int, int]: differentiated_order, coefficient
+        differentiated_order: order of monomial after differentiation
+        coefficient: coefficient generated from differentiation
     """
-    differantiated_order = 0
+    differentiated_order = 0
     coefficient = 0
     if order_of_derivative <= order_of_monomial:
         coefficient = np.prod(range(order_of_monomial, order_of_monomial - order_of_derivative, -1))
-        differantiated_order = order_of_monomial - order_of_derivative
-    return (differantiated_order, coefficient)
+        differentiated_order = order_of_monomial - order_of_derivative
+    return (differentiated_order, coefficient)
 
 
 if __name__ == "__main__":
