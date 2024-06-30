@@ -19,7 +19,7 @@ class DroneSimulator:
         self.cl_ratio = 1 # controller steps per log step, must be an integer
         self.dt_controller = self.dt/self.cl_ratio
         self.dt_dynamics = self.dt_controller/self.dc_ratio
-        self.sim_trajectory = trajectory.SpiralAndSpin()
+        self.sim_trajectory = trajectory.RandomWaypoints()
         self.sim_trajectory.set_init_state()
         self.sim_dynamics = dynamics.DroneDynamics(
             self.sim_trajectory.init_x, 
