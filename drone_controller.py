@@ -4,7 +4,7 @@ import drone_dynamics as dynamics
 import drone_parameters as params
 import drone_utils as utils
 import drone_trajectory as trajectory
-
+import drone_disturbance_estimator as disturbance_estimator
 
 class DroneController:
     def __init__(self) -> None:
@@ -28,8 +28,15 @@ class DroneController:
         self.f_d_dot = np.array([0.0, 0.0, 0.0])
         self.psi_r_rd = 0.0 # debug use only
         self.force_motor = np.array([0.0, 0.0, 0.0, 0.0])
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test", 0.01)
+        self.f_disturb = np.array([0.0, 0.0, 0.0])
+        self.torque_disturb = np.array([0.0, 0.0, 0.0])        
+        self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
+        self.f_disturb_base = np.array([0.0, 0.0, 0.0])
+        self.torque_disturb_base = np.array([0.0, 0.0, 0.0])
 
     def step_controller(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference):
+        self.step_disturbance_estimator(state)
         self.step_tracking_error(state, ref)
         self.step_desired_force(state, ref)
         self.step_tracking_control(state)
@@ -39,7 +46,21 @@ class DroneController:
         self.step_error_function_so3(state)
         self.step_motor_force()
 
-    def step_desired_force(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference):
+    def step_disturbance_estimator(self, state: dynamics.DroneDynamics):
+        tracking_error = np.zeros(6)
+        self.disturbance_estimator.step_disturbance(state.v, state.q, self.force_motor, self.get_disturbance(state), tracking_error)
+        self.f_disturb = np.array([self.disturbance_estimator.f_x.disturbance, self.disturbance_estimator.f_y.disturbance, self.disturbance_estimator.f_z.disturbance])
+        self.torque_disturb = np.array([self.disturbance_estimator.tq_x.disturbance, self.disturbance_estimator.tq_y.disturbance, self.disturbance_estimator.tq_z.disturbance])
+        self.baseline_disturbance_estimator.step_disturbance(self.get_disturbance(state), tracking_error)
+        self.f_disturb_base = np.array([self.baseline_disturbance_estimator.f_x.disturbance, self.baseline_disturbance_estimator.f_y.disturbance, self.baseline_disturbance_estimator.f_z.disturbance])
+        self.torque_disturb_base = np.array([self.baseline_disturbance_estimator.tq_x.disturbance, self.baseline_disturbance_estimator.tq_y.disturbance, self.baseline_disturbance_estimator.tq_z.disturbance])
+
+    def get_disturbance(self, state: dynamics.DroneDynamics):
+        f_disturb = self.f + state.pose.T@(state.v_dot*params.m - params.m*params.g*np.array([0.0, 0.0, 1.0]))
+        tq_disturbance = params.inertia@state.omega_dot + utils.get_hat_map(state.omega)@params.inertia@state.omega - self.torque
+        return np.hstack((f_disturb, tq_disturbance))
+
+    def step_desired_force(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference, can_sense_jerk: bool=False, can_plan_jerk: bool=True):
         """
         to do: zero protection f_d == 0 
         """
@@ -48,16 +69,28 @@ class DroneController:
                      self.e_v - params.m*params.g*e3 + params.m*ref.x_d_dot2)
         if np.abs(self.f_d@self.f_d) < 0.0001:
             print('Warning: DroneController: f_d too close to 0')
+            self.f_d = -0.0001*e3    # z positive points down
         self.e_a = (state.pose@(-self.f) + params.m*params.g*e3)/params.m - ref.x_d_dot2
-        self.f_d_dot = (-params.k_x*self.e_v - params.k_v *
-                         self.e_a + params.m*ref.x_d_dot3)
-        self.e_j = state.pose@(-self.f_dot)/params.m - ref.x_d_dot3
-        self.f_d_dot2 = (-params.k_x*self.e_a - params.k_v *
-                          self.e_j + params.m*ref.x_d_dot4)
+        if can_plan_jerk:
+            self.f_d_dot = (-params.k_x*self.e_v - params.k_v *
+                            self.e_a + params.m*ref.x_d_dot3)
+        else:
+            self.f_d_dot = (-params.k_x*self.e_v - params.k_v *
+                            self.e_a)
+        if can_sense_jerk:
+            self.e_j = state.pose@(-self.f_dot)/params.m - ref.x_d_dot3
+        else:
+            self.e_j = np.array([0.0, 0.0, 0.0])
+        if can_plan_jerk:
+            self.f_d_dot2 = (-params.k_x*self.e_a - params.k_v *
+                            self.e_j + params.m*ref.x_d_dot4)
+        else:
+            self.f_d_dot2 = (-params.k_x*self.e_a - params.k_v *
+                            self.e_j)
 
     def step_tracking_control(self, state: dynamics.DroneDynamics):
         """
-        project desired force on b3
+        project desired force on b3 to generate control input force
         """
         self.f = self.f_d@(-state.pose[:, 2])*np.array([0.0, 0.0, 1.0])
         self.f_dot = self.f_d_dot@(-state.pose[:, 2])*np.array([0.0, 0.0, 1.0]) + \
@@ -126,9 +159,40 @@ class DroneController:
                         1 - self.pose_desired[:,1]@state.pose[:,1] +
                         1 - self.pose_desired[:,2]@state.pose[:,2])
     
-    def step_motor_force(self):
-        self.force_motor = params.m_thrust_to_fm_inv@np.hstack((self.f[2], self.torque))
+    def step_motor_force(self, can_saturate=False):
+        f_motor_raw = params.m_thrust_to_fm_inv@np.hstack((self.f[2], self.torque))
+        if can_saturate:
+            self.force_motor = np.clip(f_motor_raw, a_max=params.f_motor_max, a_min=params.f_motor_min)
+            state = params.m_thrust_to_fm@self.force_motor
+            self.f[2] = state[0]
+            self.torque = state[1:]
+        else:
+            self.force_motor = f_motor_raw
 
+    def step_motor_force_wip(self):
+        """this could be formulated to a linear programming problem TBD"""
+        f_motor_raw = params.m_thrust_to_fm_inv@np.hstack((self.f[2], self.torque))
+        if np.max(np.abs(f_motor_raw)) > params.f_motor_max:
+            print("Full commanded motor force saturated!")
+            f_torque_only = params.m_thrust_to_fm_inv@np.hstack((0.0, self.torque))
+            f_torque_only = self.get_saturated_motor_force(f_torque_only)
+            df = params.f_motor_max - np.max(np.abs(f_torque_only))
+            self.force_motor = f_torque_only + df
+        else:
+            self.force_motor = f_motor_raw
+        state = params.m_thrust_to_fm@self.force_motor
+        self.f[2] = state[0]
+        self.torque = state[1:]
+
+    @staticmethod
+    def get_saturated_motor_force(f_raw):
+        f_max = np.max(np.abs(f_raw))
+        if f_max > params.f_motor_max:
+            coeff = params.f_motor_max/f_max
+            f_saturated = coeff*f_raw
+        else:
+            f_saturated = f_raw
+        return f_saturated
 
 if __name__ == "__main__":
     pass

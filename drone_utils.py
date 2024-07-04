@@ -1,8 +1,24 @@
 import numpy as np
 import quaternion
+from enum import Enum, auto
+from scipy.spatial.transform import Rotation as R
 
 
-def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+class Dim(Enum):
+    """Dimension of a 3D trajectory"""
+    X = 0
+    Y = 1
+    Z = 2
+    
+class KinematicVars(Enum):
+    """Kinematic variables"""
+    Position = 0
+    Velocity = 1
+    Acceleration = 2
+    Jerk = 3
+    Snap = 4
+
+def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     pass
 
 
@@ -20,7 +36,7 @@ def get_vee_map(m: np.ndarray) -> np.ndarray:
     return v
 
 
-def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     v_norm = np.linalg.norm(v)
     if v_norm < 0.001:
         print("Warning: get_vector_norm_derivatives: vector norm too small to get unit vector result")
@@ -30,7 +46,7 @@ def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.nda
     return (v_norm, v_norm_dot, v_norm_dot2)
 
 
-def get_unit_vector_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+def get_unit_vector_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     (v_norm, v_norm_dot, v_norm_dot2) = get_vector_norm_derivatives(v, v_dot, v_dot2)
     b = v/v_norm
     b_dot = v_dot/v_norm - (v*v_norm_dot)/v_norm**2
@@ -38,7 +54,7 @@ def get_unit_vector_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.nda
         (2*v_dot*v_norm_dot)/v_norm**2 + (2*v*v_norm_dot**2)/v_norm**3
     return (b, b_dot, b_dot2)
 
-def get_signal_derivative(t: np.ndarray, v: np.ndarray, dt) -> (np.ndarray, np.ndarray) :
+def get_signal_derivative(t: np.ndarray, v: np.ndarray, dt) -> tuple[np.ndarray, np.ndarray] :
      
     t_dv = t[1:]
     dim = np.ndim(v)
@@ -54,11 +70,19 @@ def get_signal_derivative(t: np.ndarray, v: np.ndarray, dt) -> (np.ndarray, np.n
     return t_dv, dv
 
 
-def get_quaternion_from_angular_displacement(angle_3d: np.ndarray) -> quaternion.quaternion:
-    theta = np.sqrt(angle_3d@angle_3d)
+def get_quaternion_from_angular_displacement(v: np.ndarray) -> quaternion.quaternion:
+    """convert a rotation represented by a vector v to a quaternion
+
+    Args:
+        v (np.ndarray): the direction of v is the rotation axis, the norm of v is the angle to rotate
+
+    Returns:
+        quaternion.quaternion: the quaternion
+    """
+    theta = np.sqrt(v@v)
     result = np.quaternion()
     result.real = np.cos(0.5*theta)
-    result.imag = 0.5*np.sinc(0.5*theta/np.pi)*angle_3d
+    result.imag = 0.5*np.sinc(0.5*theta/np.pi)*v
     return result
 
 
@@ -76,11 +100,26 @@ def convert_quaternion_to_vector(quat: quaternion.quaternion) -> np.ndarray:
     return result
 
 
-def normalize_rotation_matrix(self):
-    for i in range(self.rotation_matrix.shape[1]):
-        self.rotation_matrix[:, i] = self.rotation_matrix[:, i] / \
-            np.sqrt(self.rotation_matrix[:, i]@self.rotation_matrix[:, i])
+def normalize_rotation_matrix(rotation_matrix):
+    """make sure the rotation matrix is still represented by 3 unit vectors
+    """
+    for i in range(rotation_matrix.shape[1]):
+        rotation_matrix[:, i] = rotation_matrix[:, i] / \
+            np.sqrt(rotation_matrix[:, i]@rotation_matrix[:, i])
 
+
+def convert_rotation_matrix_to_quaternion(rotation_matrix) -> np.ndarray:
+    """convert a rotation matrix to a quaternion
+    """
+    rotation = R.from_matrix(rotation_matrix)
+    q = rotation.as_quat()
+    return np.array([q[3], q[0], q[1], q[2]])   # Rearrange from [x, y, z, w] to [w, x, y, z]
+
+def convert_quaternion_to_rotation_matrix(q: np.ndarray) -> np.ndarray:
+    """Convert a quaternion (in [w, x, y, z] format) to a rotation matrix."""
+    q_compatible = [q[1], q[2], q[3], q[0]] # Rearrange from [w, x, y, z] to [x, y, z, w]
+    rotation = R.from_quat(q_compatible)
+    return rotation.as_matrix() 
 
 if __name__ == "__main__":
     v_test = np.array([1, 2, 3])
