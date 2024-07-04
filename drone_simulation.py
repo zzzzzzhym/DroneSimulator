@@ -1,11 +1,12 @@
 import numpy as np
+import quaternion
+
 import drone_trajectory as trajectory
 import drone_dynamics as dynamics
 import drone_controller as controller
 import drone_utils as utils
 import drone_parameters as params
 import matplotlib.pyplot as plt
-
 
 class DroneSimulator:
     """
@@ -19,7 +20,7 @@ class DroneSimulator:
         self.cl_ratio = 1 # controller steps per log step, must be an integer
         self.dt_controller = self.dt/self.cl_ratio
         self.dt_dynamics = self.dt_controller/self.dc_ratio
-        self.sim_trajectory = trajectory.RandomWaypoints()
+        self.sim_trajectory = trajectory.RandomWaypoints("5_random_wp_map.pkl")
         self.sim_trajectory.set_init_state()
         self.sim_dynamics = dynamics.DroneDynamics(
             self.sim_trajectory.init_x, 
@@ -32,6 +33,7 @@ class DroneSimulator:
         data to plot
         '''
         self.position_trace = np.empty((0, 3))
+        self.q_trace = np.empty((0, 4))
         self.v_trace = np.empty((0, 3))
         self.dv_trace = np.empty((0, 3))
         self.e_x_trace = np.empty((0, 3))
@@ -52,6 +54,7 @@ class DroneSimulator:
         self.x_d_dot2_trace = np.empty((0, 3))
         self.x_d_dot3_trace = np.empty((0, 3))
         self.f_motor_trace = np.empty((0, 4))
+        self.f_disturb_trace = np.empty((0, 3)) # inertial frame
         self.omega_trace = np.empty((0, 3)) # inertial frame
         self.omega_dot_trace = np.empty((0, 3)) # inertial frame
         self.omega_desired_trace = np.empty((0, 3)) # inertial frame
@@ -80,6 +83,8 @@ class DroneSimulator:
             self.step_simulation()
             self.position_trace = np.vstack(
                 (self.position_trace, self.sim_dynamics.position))
+            self.q_trace = np.vstack(
+                (self.q_trace, quaternion.as_float_array(self.sim_dynamics.q)))
             self.v_trace = np.vstack((self.v_trace, self.sim_dynamics.v))
             self.dv_trace = np.vstack((self.dv_trace, self.sim_dynamics.v_dot))
             self.e_x_trace = np.vstack(
@@ -116,6 +121,8 @@ class DroneSimulator:
                 (self.x_d_dot3_trace, self.sim_trajectory.x_d_dot3))
             self.f_motor_trace = np.vstack(
                 (self.f_motor_trace, self.sim_controller.force_motor))
+            self.f_disturb_trace = np.vstack(
+                (self.f_disturb_trace, self.sim_dynamics.f_disturb))
             self.omega_trace = np.vstack(
                 (self.omega_trace, self.sim_dynamics.pose@self.sim_dynamics.omega))
             self.omega_dot_trace = np.vstack(
@@ -132,6 +139,8 @@ class DroneSimulator:
         self.pose_desired_trace = np.array(self.pose_desired_trace)
         self.pose_desired_dot_trace = np.array(self.pose_desired_dot_trace)
         self.pose_desired_dot2_trace = np.array(self.pose_desired_dot2_trace)
+
+        # plot
         self.plot_position_and_derivatives()
         self.plot_omega_and_derivatives()
         self.plot_pose_and_derivatives()
@@ -298,10 +307,16 @@ class DroneSimulator:
     def plot_position_tracking_error(self):
         fig, axs = plt.subplots(3, 4, sharex=True)
         fig.suptitle('position_tracking_error')
+        axs[0, 0].set_title("position error x")
+        axs[1, 0].set_title("position error y")
+        axs[2, 0].set_title("position error z")
         axs[0, 0].plot(self.t_span, self.e_x_trace[:, 0], marker='x')
         axs[1, 0].plot(self.t_span, self.e_x_trace[:, 1], marker='x')
         axs[2, 0].plot(self.t_span, self.e_x_trace[:, 2], marker='x')
 
+        axs[0, 1].set_title("v error x")
+        axs[1, 1].set_title("v error y")
+        axs[2, 1].set_title("v error z")
         axs[0, 1].plot(self.t_span, self.e_v_trace[:, 0], marker='x')
         axs[1, 1].plot(self.t_span, self.e_v_trace[:, 1], marker='x')
         axs[2, 1].plot(self.t_span, self.e_v_trace[:, 2], marker='x')
@@ -318,6 +333,9 @@ class DroneSimulator:
         axs[1, 1].plot(self.t_span, self.v_trace[:, 1] - self.v_d_trace[:, 1])
         axs[2, 1].plot(self.t_span, self.v_trace[:, 2] - self.v_d_trace[:, 2])        
 
+        axs[0, 2].set_title("a error x")
+        axs[1, 2].set_title("a error y")
+        axs[2, 2].set_title("a error z")
         axs[0, 2].plot(self.t_span, self.e_a_trace[:, 0], marker='x')
         axs[1, 2].plot(self.t_span, self.e_a_trace[:, 1], marker='x')
         axs[2, 2].plot(self.t_span, self.e_a_trace[:, 2], marker='x')
@@ -326,6 +344,9 @@ class DroneSimulator:
         axs[1, 2].plot(t_diff, e_v_diff[:, 1], marker='.')
         axs[2, 2].plot(t_diff, e_v_diff[:, 2], marker='.')
 
+        axs[0, 3].set_title("j error x")
+        axs[1, 3].set_title("j error y")
+        axs[2, 3].set_title("j error z")
         axs[0, 3].plot(self.t_span, self.e_j_trace[:, 0], marker='x')
         axs[1, 3].plot(self.t_span, self.e_j_trace[:, 1], marker='x')
         axs[2, 3].plot(self.t_span, self.e_j_trace[:, 2], marker='x')

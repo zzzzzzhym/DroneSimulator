@@ -1,4 +1,4 @@
-# Neural-fly in applied in python simulation 
+# Neural-fly applied in python simulation 
 This repo replicates Neural-Fly[1] project in a simulation environment. 
 
 ## Introduction

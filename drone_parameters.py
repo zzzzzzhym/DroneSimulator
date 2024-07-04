@@ -26,3 +26,4 @@ m_thrust_to_fm = np.array([[1.0, 1.0, 1.0, 1.0],
                            [-c_tau_f, c_tau_f, -c_tau_f, c_tau_f]])
 m_thrust_to_fm_inv = np.linalg.inv(m_thrust_to_fm)
 
+m_payload = 1.0 # kg
