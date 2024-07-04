@@ -54,7 +54,7 @@ def optimize_time_distribution(waypoints: waypoint.Waypoint, config: trajectory_
         _type_: _description_
     """
     step_size = 1
-    max_steps = 20
+    max_steps = 10
     alpha = 0.5
     beta = 0.5
 

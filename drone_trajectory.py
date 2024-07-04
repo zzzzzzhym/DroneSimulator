@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt     # test only
 from mpl_toolkits import mplot3d    # test only
 import pickle
+import os
 from trajectory_generation import trajectory_generator_qp 
 
 class TrajectoryReference:
@@ -23,12 +24,24 @@ class TrajectoryReference:
         pass
 
 class RandomWaypoints(TrajectoryReference):
-    def __init__(self):
+    def __init__(self, trajectory_name):
         super().__init__()  # Initialize parent class parameters
-        self.trajectory: trajectory_generator_qp.TrajectoryGenerator = self.load_trajectory('trajectory.pkl')
+        file_path = self.get_trajectory_file_path(trajectory_name)
+        if os.path.exists(file_path):
+            self.trajectory: trajectory_generator_qp.TrajectoryGenerator = self.load_trajectory(file_path)
+        else:
+            raise ValueError("No such file: " + file_path)
         for dim in self.trajectory.profiles:
             for section in dim:
                 section.extend_to_derivative_order(4)
+
+    @staticmethod
+    def get_trajectory_file_path(file_name: str) -> str:
+        current_dir = os.path.abspath(__file__)
+        file_path = os.path.join(os.path.dirname(current_dir), "data")
+        file_path = os.path.join(file_path, "map")
+        file_path = os.path.join(file_path, file_name)
+        return file_path
 
     def load_trajectory(self, pkl_path) -> trajectory_generator_qp.TrajectoryGenerator:
         with open(pkl_path, 'rb') as file:
