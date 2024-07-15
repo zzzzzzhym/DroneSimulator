@@ -296,11 +296,9 @@ class TrajectoryGenerator:
         # todo check constraint violation
 
         return self.unpack_vector_to_component_profile(packed_result), cost
-    
+
     def plot_trajectory(self):
         fig, axs = plt.subplots(1, 1, sharex=True)
-        fig2, axs2 = plt.subplots(1, 1, sharex=True)
-        
         # Use projection='3d' for 3D plots
         axs = fig.add_subplot(111, projection='3d')
         for i in range(self.waypoints.number_of_sections):
@@ -313,12 +311,9 @@ class TrajectoryGenerator:
                 y = np.append(y, self.profiles[1][i].sample_polynomial(0, t - self.time_shift[i]))
                 z = np.append(z, self.profiles[2][i].sample_polynomial(0, t - self.time_shift[i]))
             axs.plot3D(x,y,z)
-            axs2.plot(x,y)
         axs.plot3D(self.waypoints.coordinates[:, 0],
                    self.waypoints.coordinates[:, 1],
                    self.waypoints.coordinates[:, 2], '.', c='blue', label='Points')
-        axs2.plot(self.waypoints.coordinates[:, 0],
-                  self.waypoints.coordinates[:, 1], '.', c='blue', label='Points')
         # for coordinate in self.waypoints.coordinates:
         #     cubic_profile = get_cubic_profile(coordinate, self.corridor_width)
         #     axs.plot3D(cubic_profile[:, 0],
@@ -329,9 +324,7 @@ class TrajectoryGenerator:
         axs.set_xlabel('X')
         axs.set_ylabel('Y')
         axs.set_zlabel('Z')
-        axs.axis('equal')        
-        axs2.axis('equal')        
-
+        axs.axis('equal')            
         fig3, axs3 = plt.subplots(3, 2, sharex=True)
         for i in range(self.waypoints.number_of_sections):
             t_samples = np.linspace(self.waypoints.waypoint_time_stamp[i], self.waypoints.waypoint_time_stamp[i+1], 11)
@@ -345,6 +338,9 @@ class TrajectoryGenerator:
             axs3[0, 0].plot(t_samples, x)
             axs3[1, 0].plot(t_samples, y)
             axs3[2, 0].plot(t_samples, z)
+            axs3[0, 0].set_title("vx")
+            axs3[1, 0].set_title("vy")
+            axs3[2, 0].set_title("vz")
             x = np.empty((0,))
             y = np.empty((0,))
             z = np.empty((0,))
@@ -355,6 +351,9 @@ class TrajectoryGenerator:
             axs3[0, 1].plot(t_samples, x)
             axs3[1, 1].plot(t_samples, y)
             axs3[2, 1].plot(t_samples, z)
+            axs3[0, 1].set_title("ax")
+            axs3[1, 1].set_title("ay")
+            axs3[2, 1].set_title("az")
 
 def get_cubic_profile(center_coordinate: np.ndarray, half_side_length: float) -> np.ndarray:
     result = np.empty((0,3))

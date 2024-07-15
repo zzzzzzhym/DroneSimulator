@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt     # test only
 from mpl_toolkits import mplot3d    # test only
 import pickle
 import os
-from trajectory_generation import trajectory_generator_qp 
+
+from trajectory_generation import flight_map
 
 class TrajectoryReference:
     def __init__(self) -> None:
@@ -24,55 +25,13 @@ class TrajectoryReference:
         pass
 
 class RandomWaypoints(TrajectoryReference):
-    def __init__(self, trajectory_name):
+    def __init__(self, map_name):
         super().__init__()  # Initialize parent class parameters
-        file_path = self.get_trajectory_file_path(trajectory_name)
-        if os.path.exists(file_path):
-            self.trajectory: trajectory_generator_qp.TrajectoryGenerator = self.load_trajectory(file_path)
-        else:
-            raise ValueError("No such file: " + file_path)
-        for dim in self.trajectory.profiles:
-            for section in dim:
-                section.extend_to_derivative_order(4)
-
-    @staticmethod
-    def get_trajectory_file_path(file_name: str) -> str:
-        current_dir = os.path.abspath(__file__)
-        file_path = os.path.join(os.path.dirname(current_dir), "data")
-        file_path = os.path.join(file_path, "map")
-        file_path = os.path.join(file_path, file_name)
-        return file_path
-
-    def load_trajectory(self, pkl_path) -> trajectory_generator_qp.TrajectoryGenerator:
-        with open(pkl_path, 'rb') as file:
-        # Deserialize each object from the file
-            return pickle.load(file)
-
-    def step_reference_state(self, t) -> None:
-        t_clamped = min(self.trajectory.waypoints.waypoint_time_stamp[-1], t)
-        i = self.find_section(t_clamped)
-        self.x_d = np.array([self.trajectory.profiles[0][i].sample_polynomial(0, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[1][i].sample_polynomial(0, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[2][i].sample_polynomial(0, t_clamped - self.trajectory.time_shift[i])])
-        self.v_d = np.array([self.trajectory.profiles[0][i].sample_polynomial(1, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[1][i].sample_polynomial(1, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[2][i].sample_polynomial(1, t_clamped - self.trajectory.time_shift[i])])
-        self.x_d_dot2 = np.array([self.trajectory.profiles[0][i].sample_polynomial(2, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[1][i].sample_polynomial(2, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[2][i].sample_polynomial(2, t_clamped - self.trajectory.time_shift[i])])
-        self.x_d_dot3 = np.array([self.trajectory.profiles[0][i].sample_polynomial(3, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[1][i].sample_polynomial(3, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[2][i].sample_polynomial(3, t_clamped - self.trajectory.time_shift[i])])
-        self.x_d_dot4 = np.array([self.trajectory.profiles[0][i].sample_polynomial(4, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[1][i].sample_polynomial(4, t_clamped - self.trajectory.time_shift[i]),
-                             self.trajectory.profiles[2][i].sample_polynomial(4, t_clamped - self.trajectory.time_shift[i])])
+        file_name_prefix = "5_random_wp_map_"
+        self.trajectory: flight_map.FlightMap = flight_map.construct_map_from_subtrajs(file_name_prefix, 24)
         
-
-    def find_section(self, t) -> int:
-        i = np.searchsorted(self.trajectory.waypoints.waypoint_time_stamp, t) - 1
-        i = min(self.trajectory.waypoints.number_of_sections - 1, i)
-        i = max(0, i)
-        return i
+    def step_reference_state(self, t) -> None:
+        self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4 = self.trajectory.read_data_by_time(t)   
 
 class SpiralAndSpin(TrajectoryReference):
     def step_reference_state(self, t) -> None:
@@ -307,7 +266,7 @@ class Hover(TrajectoryReference):
 
 if __name__ == "__main__":
     t_test = np.arange(0, 10.1, 0.1)
-    ref_test = RandomWaypoints()
+    ref_test = RandomWaypoints("random_wp_map_2min.pkl")
     # ref_test = SpiralAndSpin()
     x = []
     y = []

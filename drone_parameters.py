@@ -27,3 +27,6 @@ m_thrust_to_fm = np.array([[1.0, 1.0, 1.0, 1.0],
 m_thrust_to_fm_inv = np.linalg.inv(m_thrust_to_fm)
 
 m_payload = 1.0 # kg
+c_d = 1.5   # no unit [0.5-1.5]
+area_frontal = 0.1  # m^2 [0.01-0.1]
+rho_air = 1.225 # kg/m^3
