@@ -109,7 +109,7 @@ class Trainer:
         loss_phi_trace_phi = []
         loss_h_trace = []
         # for epoch in range(config.training['num_epochs']):
-        for epoch in range(20):
+        for epoch in range(1000):
             loss_phi, loss_h = self.step_training(epoch)
             loss_phi_trace_phi.append(loss_phi/config.num_of_conditions)
             loss_h_trace.append(loss_h/config.num_of_conditions)

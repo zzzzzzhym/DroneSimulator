@@ -10,11 +10,7 @@ import waypoint_generator
 
 
 
-def get_trajecotry() -> trajectory_generator.TrajectoryGenerator:
-    section_time_span = 1.0
-    number_of_points = 5
-    point_to_point_distance = 1.0
-
+def get_trajecotry(section_time_span, number_of_points, point_to_point_distance) -> trajectory_generator.TrajectoryGenerator:
     waypoint_generator_instance = waypoint_generator.WaypointGenerator(point_to_point_distance, 
                                                                     number_of_points, 
                                                                     section_time_span*number_of_points)
@@ -33,46 +29,62 @@ def get_trajecotry() -> trajectory_generator.TrajectoryGenerator:
     print(waypoints.section_time)
     return trajectory
 
-def write_trajectory(dir_path: str, file_name: str) -> None:
+def write_trajectory(trajectory: trajectory_generator.TrajectoryGenerator, file_name: str) -> None:
     """Write trajectory information into file"""
-    if not os.path.isdir(dir_path):
-        raise ValueError("Trajectory logging directory is invalid")
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    map_folder_dir = os.path.join(os.path.dirname(current_dir), "data")
+    map_folder_dir = os.path.join(map_folder_dir, "map")    
+    file_path = os.path.join(map_folder_dir, file_name)
+    if os.path.exists(file_path):
+        raise ValueError("File exist: " + file_path)
     else:
-        file_path = os.path.join(dir_path, file_name)
-        if os.path.exists(file_path):
-            raise ValueError("File exist: " + file_path)
-        else:
-            trajectory = get_trajecotry()
-            with open(file_path, 'wb') as file:
-                pickle.dump(trajectory, file)
-            print("Trajectory data is written into:\n" + file_path)
+        with open(file_path, 'wb') as file:
+            pickle.dump(trajectory, file)
+        print("Trajectory data is written into:\n" + file_path)
 
-def read_trajectory(map_path: str):
+def read_trajectory(file_name: str):
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    map_folder_dir = os.path.join(os.path.dirname(current_dir), "data")
+    map_folder_dir = os.path.join(map_folder_dir, "map")   
+    map_path = os.path.join(map_folder_dir, file_name)    
     if os.path.exists(map_path):
         with open(map_path, 'rb') as file:
         # Deserialize each object from the file
             loaded_trajectory = pickle.load(file)
-            loaded_trajectory.plot_trajectory()
+            return loaded_trajectory
     else:
         raise ValueError("No such file: " + map_path)
 
+def make_random_trajectories(num_of_traj: int):
+    file_name_prefix = "5_random_wp_map_"
+    file_name_suffix = ".pkl"
+    section_time_span = 1.0
+    number_of_points = 5
+    point_to_point_distance = 3.0    
+    for i in range(num_of_traj):
+        file_name = file_name_prefix + str(i) + file_name_suffix
+        trajectory = get_trajecotry(section_time_span, number_of_points, point_to_point_distance)
+        write_trajectory(trajectory, file_name)    
+
 if __name__ == "__main__":
-    '''
-    optimization check
-    '''
-    file_name = "5_random_wp_map.pkl"
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    map_folder_dir = os.path.join(os.path.dirname(current_dir), "data")
-    map_folder_dir = os.path.join(map_folder_dir, "map")
-    write_trajectory(map_folder_dir, file_name)
+    # file_name = "5_random_wp_map.pkl"
+    # section_time_span = 1.0
+    # number_of_points = 5
+    # point_to_point_distance = 3.0    
+    # trajectory = get_trajecotry(section_time_span, number_of_points, point_to_point_distance)
+    # write_trajectory(trajectory, file_name)
 
-    """To load file, use the following code
-    with open('trajectory.pkl', 'rb') as file:
-    # Deserialize each object from the file
-        loaded_trajectory = pickle.load(file)
-    loaded_trajectory.plot_trajectory()
-    """
+    # """To load file, use the following code
+    # with open('trajectory.pkl', 'rb') as file:
+    # # Deserialize each object from the file
+    #     loaded_trajectory = pickle.load(file)
+    # loaded_trajectory.plot_trajectory()
+    # """
+    # loaded_trajectory = read_trajectory(file_name)
+    # loaded_trajectory.plot_trajectory()
+    # plt.show()
 
-    map_path = os.path.join(map_folder_dir, file_name)
-    read_trajectory(map_path)
+    make_random_trajectories(24)
+    loaded_trajectory = read_trajectory("5_random_wp_map_2.pkl")
+    loaded_trajectory.plot_trajectory()    
     plt.show()

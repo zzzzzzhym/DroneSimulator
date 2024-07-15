@@ -14,13 +14,16 @@ class DroneSimulator:
     """
 
     def __init__(self) -> None:
-        self.t = 0.0
-        self.dt = 0.01
-        self.dc_ratio = 2 # dynamics steps per controller step, must be an integer
-        self.cl_ratio = 1 # controller steps per log step, must be an integer
-        self.dt_controller = self.dt/self.cl_ratio
-        self.dt_dynamics = self.dt_controller/self.dc_ratio
-        self.sim_trajectory = trajectory.RandomWaypoints("5_random_wp_map.pkl")
+        self.t = 0.0    # simulation epoch time
+        self.dt = 0.01  # simulation step to log output
+        self.dt_controller = 0.01   # controller cycle time
+        self.dt_dynamics = 0.005    # dynamics model cycle time
+        self.cl_ratio = round(self.dt/self.dt_controller)             # controller steps per log step, must be an integer
+        self.dc_ratio = round(self.dt_controller/self.dt_dynamics)    # dynamics steps per controller step, must be an integer
+        print("number of controller steps per simulation step: " + str(self.cl_ratio))
+        print("number of dynamics model steps per controller step: " + str(self.dc_ratio))
+        self.sim_trajectory = trajectory.RandomWaypoints("random_wp_map_2min.pkl")
+        # self.sim_trajectory = trajectory.SpiralAndSpin()
         self.sim_trajectory.set_init_state()
         self.sim_dynamics = dynamics.DroneDynamics(
             self.sim_trajectory.init_x, 
@@ -65,13 +68,17 @@ class DroneSimulator:
         self.pose_desired_dot2_trace = []
         self.t_span = []
 
-    def step_simulation(self):
-        for _ in range(self.cl_ratio):
+    def step_simulation(self, t: float):
+        t_controller = t
+        for i in range(self.cl_ratio):
+            t_controller += i*self.dt_controller
             self.sim_trajectory.step_reference_state(self.t)
             self.sim_dynamics.f = self.sim_controller.f
             self.sim_dynamics.torque = self.sim_controller.torque
-            for _ in range(self.dc_ratio):
-                self.sim_dynamics.step_dynamics()
+            t_dynamics = t_controller
+            for j in range(self.dc_ratio):
+                t_dynamics += j*self.dt_dynamics
+                self.sim_dynamics.step_dynamics(t_dynamics)
             self.sim_controller.step_controller(
                 self.sim_dynamics, self.sim_trajectory)
             self.t += self.dt_controller
@@ -79,8 +86,8 @@ class DroneSimulator:
     def run_simulation(self, t_end):
         self.t_span = np.arange(0.0, t_end + self.dt, self.dt)
 
-        for _ in self.t_span:
-            self.step_simulation()
+        for t in self.t_span:
+            self.step_simulation(t)
             self.position_trace = np.vstack(
                 (self.position_trace, self.sim_dynamics.position))
             self.q_trace = np.vstack(
@@ -153,9 +160,8 @@ class DroneSimulator:
         self.plot_pose_desired()
         self.plot_omega_desired()
         self.plot_motor_force()
-        
+        self.plot_disturbance_force()
         self.plot_3d_trace()
-        plt.show()
 
     def plot_position_and_derivatives(self):
         fig, axs = plt.subplots(3, 4, sharex=True)
@@ -466,6 +472,13 @@ class DroneSimulator:
         axs3[1, 2].plot(t_diff, pose_desired_dot_diff[:, 1, 2], marker='.')
         axs3[2, 2].plot(t_diff, pose_desired_dot_diff[:, 2, 2], marker='.') 
 
+    def plot_disturbance_force(self):
+        fig, axs = plt.subplots(3, 1, sharex=True)
+        fig.suptitle('disturbance force')
+        axs[0].plot(self.t_span, self.f_disturb_trace[:, 0], marker='x')
+        axs[1].plot(self.t_span, self.f_disturb_trace[:, 1], marker='x')
+        axs[2].plot(self.t_span, self.f_disturb_trace[:, 2], marker='x')
+
     def plot_motor_force(self):
         fig, axs = plt.subplots(4, 1, sharex=True)
         fig.suptitle('motor force')
@@ -473,6 +486,7 @@ class DroneSimulator:
         axs[1].plot(self.t_span, self.f_motor_trace[:, 1], marker='x')
         axs[2].plot(self.t_span, self.f_motor_trace[:, 2], marker='x')
         axs[3].plot(self.t_span, self.f_motor_trace[:, 3], marker='x')   
+
 
     def plot_omega_desired(self):
         fig, axs = plt.subplots(3, 1, sharex=True)
@@ -531,7 +545,7 @@ class DroneSimulator:
         axs9.invert_yaxis()
         axs9.invert_xaxis()
 
-def prepare_drone_pose_plot(position: np.array, pose: np.array) -> (np.array, np.array):
+def prepare_drone_pose_plot(position: np.ndarray, pose: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     b1b2 = np.vstack((position, 
                         position + 0.5*pose[:,0].T,
                         position + 0.5*pose[:,1].T,
@@ -546,3 +560,4 @@ def prepare_drone_pose_plot(position: np.array, pose: np.array) -> (np.array, np
 if __name__ == "__main__":
     sim_test = DroneSimulator()
     sim_test.run_simulation(10)
+    plt.show()

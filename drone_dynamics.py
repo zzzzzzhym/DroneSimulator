@@ -38,7 +38,9 @@ class DroneDynamics:
         '''
         disturbance
         '''
-        self.f_disturb = disturbance.DisturbanceForce.initialize_force()
+        self.f_disturb_implicit = disturbance.DisturbanceForce.initialize_implicit_force()
+        self.f_disturb_explicit = np.array([0.0, 0.0, 0.0])
+        self.f_disturb = self.f_disturb_implicit + self.f_disturb_explicit
 
     def pack_state_vector(self) -> np.ndarray:
         q = np.array([1.0, 0.0, 0.0, 0.0]) # quaternion 
@@ -55,9 +57,9 @@ class DroneDynamics:
                       self.omega[0],    # 10
                       self.omega[1],    # 11
                       self.omega[2],    # 12
-                      self.f_disturb[0],    # 13
-                      self.f_disturb[1],    # 14
-                      self.f_disturb[2]])   # 15
+                      self.f_disturb_implicit[0],    # 13
+                      self.f_disturb_implicit[1],    # 14
+                      self.f_disturb_implicit[2]])   # 15
                       
         return y
 
@@ -68,7 +70,7 @@ class DroneDynamics:
         q_instance = quaternion_updater.QuaternionOfRotation(self.q)
         self.pose = q_instance.step_rotation_matrix(self.pose)
         self.omega = y[10:13]
-        self.f_disturb = y[13:16]
+        self.f_disturb_implicit = y[13:16]
 
     def unpack_state_derivatives(self, y_dot):
         self.v_dot = y_dot[3:6]
@@ -76,23 +78,28 @@ class DroneDynamics:
         self.omega_dot = y_dot[10:13]
         self.f_disturb_dot = y_dot[13:16]
 
-    def step_state_vector(self, y_0: np.ndarray) -> np.ndarray:
+    def step_state_vector(self, y_0: np.ndarray, t: float) -> np.ndarray:
+        t_start = t
+        t_end = t + self.dt
+        t_start = 0
+        t_end = 0 + self.dt
         result = solve_ivp(self.get_derivatives_from_eom, 
-                           (0, self.dt), 
+                           (t_start, t_end), 
                            y_0, 
                            method = 'RK45', 
-                           t_eval=[self.dt])
+                           t_eval=[t_end])
         return result.y.reshape(-1)    # convert an nx1 matrix to 1xn vector
 
-    def step_disturbance_force(self):
-        self.f_disturb = disturbance.const_force(params.m_payload)
+    def step_disturbance_force(self, t: float, state: np.ndarray):
+        self.f_disturb_explicit = disturbance.DisturbanceForce.get_explicit_force(t, state)
+        self.f_disturb = self.f_disturb_implicit + self.f_disturb_explicit
 
-    def step_dynamics(self) -> None:
-        # self.step_disturbance_force()
+    def step_dynamics(self, t: float) -> None:
         y_0 = self.pack_state_vector()
-        y_t = self.step_state_vector(y_0)
+        self.step_disturbance_force(t, y_0)
+        y_t = self.step_state_vector(y_0, t)
         self.unpack_state_vector(y_t)
-        y_t_dot = self.get_derivatives_from_eom(0.0, y_t)   # argument t does affect output
+        y_t_dot = self.get_derivatives_from_eom(t, y_t)   # argument t does affect output
         self.unpack_state_derivatives(y_t_dot)
 
     def get_derivatives_from_eom(self, t: float, y: np.ndarray) -> np.ndarray:
@@ -118,15 +125,15 @@ class DroneDynamics:
         omega = y[10:13]
         omega_in_inertial_frame = self.pose@omega
         pose = q_instance.step_rotation_matrix(self.pose)
-        f_disturb = y[13:16]
+        f_disturb_implicit = y[13:16]
 
         position_dot = v
         v_dot = params.g*np.array([0.0, 0.0, 1.0]) - \
-                pose@self.f/params.m + f_disturb
+                pose@self.f/params.m + f_disturb_implicit + disturbance.DisturbanceForce.get_explicit_force(t, y)
         q_instance.step_derivative(omega_in_inertial_frame)     # quaternion derivative takes omega in intertal frame
         omega_dot = params.inertia_inv@(self.torque -
                                         utils.get_hat_map(omega)@params.inertia@omega)
-        f_disturb_dot = disturbance.DisturbanceForce.get_force_derivatives()
+        f_disturb_implicit_dot = disturbance.DisturbanceForce.get_implicit_force_derivatives()
         y_dot = np.array([  position_dot[0],  # 0
                             position_dot[1],  # 1
                             position_dot[2],  # 2
@@ -140,9 +147,9 @@ class DroneDynamics:
                             omega_dot[0],   # 10
                             omega_dot[1],   # 11
                             omega_dot[2],   # 12
-                            f_disturb_dot[0],   # 13
-                            f_disturb_dot[1],   # 14
-                            f_disturb_dot[2]])  # 15
+                            f_disturb_implicit_dot[0],   # 13
+                            f_disturb_implicit_dot[1],   # 14
+                            f_disturb_implicit_dot[2]])  # 15
         return y_dot
     
 
@@ -153,7 +160,7 @@ if __name__ == "__main__":
     omega1 = np.array([np.pi/6, 0.0, 0.0])
     dt1 = 1.0
     kinematics = DroneDynamics(x, v1, pose1, omega1, dt1)
-    kinematics.step_dynamics()
+    kinematics.step_dynamics(0.0)
     pose_answer = np.array([[1.0, 0.0, 0.0],
                        [0.0, np.cos(np.pi/6), -np.sin(np.pi/6)],
                        [0.0, np.sin(np.pi/6), np.cos(np.pi/6)]])
@@ -162,11 +169,11 @@ if __name__ == "__main__":
     print(kinematics.position - position_answer)
     dt1 = 0.01
     kinematics = DroneDynamics(x, v1, pose1, omega1, dt1)
-    for _ in range(100):
-        kinematics.step_dynamics()
+    for i in range(100):
+        kinematics.step_dynamics(dt1*i)
     print(kinematics.pose - pose_answer)
     print(kinematics.position - position_answer)
 
     kinematics.torque = np.array([1.0, 0.0, 0.0])
-    kinematics.step_dynamics()
+    kinematics.step_dynamics(dt1*100)
     print(kinematics.omega_dot - params.inertia_inv@kinematics.torque)
