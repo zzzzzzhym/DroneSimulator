@@ -2,14 +2,15 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.dataset import random_split
 import numpy as np
-import pickle
 import os
+import pandas as pd
+from ast import literal_eval
 
 import model_config as config
 
 class LearningDataset(Dataset):
 
-    def __init__(self, inputs: np.ndarray, outputs: np.ndarray, conditions: np.ndarray) -> None:
+    def __init__(self, input: np.ndarray, output: np.ndarray, conditions: np.ndarray) -> None:
         """
 
         Args:
@@ -17,16 +18,16 @@ class LearningDataset(Dataset):
             outputs (np.ndarray): disturbance force (3)
             conditions (np.ndarray): conditions
         """
-        self.inputs = inputs
-        self.outputs = outputs
+        self.input = input
+        self.output = output
         self.c = conditions
 
     def __len__(self):
-        return len(self.inputs)
+        return len(self.input)
 
     def __getitem__(self, idx):
-        input = self.inputs[idx, :]
-        output = self.outputs[idx, :]
+        input = self.input[idx, :]
+        output = self.output[idx, :]
         sample = {'input': torch.tensor(input), 
                   'output': torch.tensor(output), 
                   'c': torch.tensor(self.c)}
@@ -59,21 +60,76 @@ def get_data_loaders(training_data: LearningDataset) -> tuple[DataLoader, DataLo
     a_loader = torch.utils.data.DataLoader(a_set, batch_size=config.training['a_shot'], shuffle=True)
     return phi_loader, a_loader
 
-def prepare_loader_sets(menu: list) -> tuple[list, list]:
-    phi_set = []
-    a_set = []
+def prepare_datasets(menu: list) -> list:
+    datasets = []
     condition_id = 0    # ID value doesn't matter
     for file in menu:
         data = load_sim_data(file)
-        data = convert_sim_to_training_data(data, condition_id)
-        phi_loader, a_loader = get_data_loaders(data)
+        dataset = convert_sim_to_training_data(data, condition_id)
         condition_id += 1
+        datasets.append(dataset)
+    return datasets
+
+def prepare_loadersets(datasets: list) -> tuple[list, list]:
+    phi_set = []
+    a_set = []
+    for data in datasets:
+        phi_loader, a_loader = get_data_loaders(data)
         phi_set.append(phi_loader)
         a_set.append(a_loader)
     return phi_set, a_set
 
+def prepare_back2back_datasets(menu: list) -> list:
+    datasets = []
+    condition_id = 0    # ID value doesn't matter
+    for file in menu:
+        data = load_back2back_data(file)
+        dataset = convert_sim_to_training_data(data, condition_id)
+        condition_id += 1
+        datasets.append(dataset)
+    return datasets
+
+def load_back2back_data(file_name: str) -> np.ndarray:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(os.path.dirname(current_dir), "data")
+    file_path = os.path.join(file_path, "training_back2back")    
+    file_path = os.path.join(file_path, file_name)    
+    if os.path.exists(file_path):
+        # Load the csv using a pandas.DataFrame
+        df = pd.read_csv(file_path)
+
+        # Lists are loaded as strings by default, convert them back to lists
+        for field in df.columns[1:]:
+            if isinstance(df[field][0], str):
+                df[field] = df[field].apply(literal_eval)
+
+        # Copy all the data to a dictionary, and make things np.ndarrays
+        data = {}
+        for field in df.columns[1:]:
+            data[field] = np.array(df[field].tolist(), dtype=float)
+
+        sim_data =np.hstack((data['v'], data['q'], data['pwm']/1000, data['fa']))
+        
+        return sim_data
+    else:
+        raise ValueError("No such file: " + file_path)
+
+
+
 if __name__ == "__main__":
-    phi_set, a_set = prepare_loader_sets(["test_sample.csv"])
-    for i, batch in enumerate(phi_set[0]):
-        print((batch.keys()))
+    # dataset = prepare_datasets(["test_sample.csv"])
+    # phi_set, a_set = prepare_loadersets(dataset)
+    # for batch_idx, data_batch in enumerate(phi_set[0]):
+    #     print(f"Batch {batch_idx + 1}:")
+    #     print(f"Data:\n{data_batch}")
+    dataset = prepare_back2back_datasets(['custom_random3_baseline_10wind.csv',
+                                          'custom_random3_baseline_20wind.csv',
+                                          'custom_random3_baseline_30wind.csv',
+                                          'custom_random3_baseline_40wind.csv',
+                                          'custom_random3_baseline_50wind.csv',
+                                          'custom_random3_baseline_nowind.csv'])
+    phi_set, a_set = prepare_loadersets(dataset)
+    for batch_idx, data_batch in enumerate(phi_set[1]):
+        print(f"Batch {batch_idx + 1}:")
+        print(f"Data:\n{data_batch}")
 

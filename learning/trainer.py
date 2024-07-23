@@ -26,6 +26,9 @@ class Trainer:
         self.h_net.zero_grad()
         self.loaderset_a = []
         self.loaderset_phi = []
+        self.dataset = []
+        self.loss_phi_trace = []
+        self.loss_h_trace = []
 
     @staticmethod
     def get_optimal_a(phi: torch.Tensor, ground_truth):
@@ -105,21 +108,68 @@ class Trainer:
 
 
     def train_model(self, data_files: list):
-        self.loaderset_phi, self.loaderset_a = data_manager.prepare_loader_sets(data_files)
-        loss_phi_trace_phi = []
-        loss_h_trace = []
+        # self.dataset = data_manager.prepare_datasets(data_files)
+        self.dataset = data_manager.prepare_back2back_datasets(data_files)
+        self.loaderset_phi, self.loaderset_a = data_manager.prepare_loadersets(self.dataset)
+        self.loss_phi_trace = []
+        self.loss_h_trace = []
         # for epoch in range(config.training['num_epochs']):
         for epoch in range(1000):
             loss_phi, loss_h = self.step_training(epoch)
-            loss_phi_trace_phi.append(loss_phi/config.num_of_conditions)
-            loss_h_trace.append(loss_h/config.num_of_conditions)
-            if epoch % 10 == 0:
-                print('[%d] loss_f: %.2f loss_c: %.2f' % (epoch + 1, loss_phi_trace_phi[-1], loss_h_trace[-1]))
+            self.loss_phi_trace.append(loss_phi/config.num_of_conditions)
+            self.loss_h_trace.append(loss_h/config.num_of_conditions)
+            if epoch % 100 == 0:
+                print('[%d] loss_f: %.2f loss_c: %.2f' % (epoch + 1, self.loss_phi_trace[-1], self.loss_h_trace[-1]))
+    
+    def verify_model(self):
+        self.phi_net.eval()
+        with torch.no_grad():
+            phi_out = self.phi_net(torch.tensor(self.dataset[0].input))
+            groundtruth = torch.tensor(self.dataset[0].output)
+            a = self.get_optimal_a(phi_out, groundtruth)
+            prediction = self.get_prediction(phi_out, a)
+            error = groundtruth - prediction
+        return error, groundtruth, prediction
+
+    def plot_prediction_error(self):
+        error, groundtruth, prediction = self.verify_model()
+        fig, axs = plt.subplots(3, 2)
+        axs[0, 0].plot(groundtruth[:, 0])
+        axs[1, 0].plot(groundtruth[:, 1])
+        axs[2, 0].plot(groundtruth[:, 2])
+        axs[0, 0].plot(prediction[:, 0])
+        axs[1, 0].plot(prediction[:, 1])
+        axs[2, 0].plot(prediction[:, 2])
+        axs[0, 0].legend(["groundtruth", "prediction"]) 
+        axs[0, 0].set_ylabel('f_disturb_x')
+        axs[1, 0].set_ylabel('f_disturb_y')
+        axs[2, 0].set_ylabel('f_disturb_z')
+
+        axs[0, 1].plot(error[:, 0])
+        axs[1, 1].plot(error[:, 1])
+        axs[2, 1].plot(error[:, 2])
+
+    def plot_loss(self):
+        fig, axs = plt.subplots(2, 1)
+        axs[0].plot(self.loss_phi_trace)
+        axs[0].set_ylabel('loss_phi_trace [N]')
+        axs[1].plot(self.loss_h_trace)
+        axs[1].set_ylabel('loss_h_trace')
+        axs[1].set_xlabel('epoch')
 
 
 if __name__ == "__main__":
     trainer = Trainer()
-    trainer.train_model(["test_sample.csv"])
+    # trainer.train_model(["test_air_drag_0.csv"])
+    trainer.train_model(['custom_random3_baseline_10wind.csv',
+                         'custom_random3_baseline_20wind.csv',
+                         'custom_random3_baseline_30wind.csv',
+                         'custom_random3_baseline_40wind.csv',
+                         'custom_random3_baseline_50wind.csv',
+                         'custom_random3_baseline_nowind.csv'])
+    trainer.plot_loss()
+    trainer.plot_prediction_error()
+    plt.show()
 
 
 
