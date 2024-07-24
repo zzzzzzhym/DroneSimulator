@@ -108,8 +108,8 @@ class Trainer:
 
 
     def train_model(self, data_files: list):
-        # self.dataset = data_manager.prepare_datasets(data_files)
-        self.dataset = data_manager.prepare_back2back_datasets(data_files)
+        self.dataset = data_manager.prepare_datasets(data_files)
+        # self.dataset = data_manager.prepare_back2back_datasets(data_files)
         self.loaderset_phi, self.loaderset_a = data_manager.prepare_loadersets(self.dataset)
         self.loss_phi_trace = []
         self.loss_h_trace = []
@@ -160,13 +160,13 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer()
-    # trainer.train_model(["test_air_drag_0.csv"])
-    trainer.train_model(['custom_random3_baseline_10wind.csv',
-                         'custom_random3_baseline_20wind.csv',
-                         'custom_random3_baseline_30wind.csv',
-                         'custom_random3_baseline_40wind.csv',
-                         'custom_random3_baseline_50wind.csv',
-                         'custom_random3_baseline_nowind.csv'])
+    trainer.train_model(["test_air_drag_0.csv"])
+    # trainer.train_model(['custom_random3_baseline_10wind.csv',
+    #                      'custom_random3_baseline_20wind.csv',
+    #                      'custom_random3_baseline_30wind.csv',
+    #                      'custom_random3_baseline_40wind.csv',
+    #                      'custom_random3_baseline_50wind.csv',
+    #                      'custom_random3_baseline_nowind.csv'])
     trainer.plot_loss()
     trainer.plot_prediction_error()
     plt.show()

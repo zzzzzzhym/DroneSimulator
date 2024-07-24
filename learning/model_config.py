@@ -1,4 +1,4 @@
-num_of_conditions = 6
+num_of_conditions = 1
 
 phi_net = {}
 

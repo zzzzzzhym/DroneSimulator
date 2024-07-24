@@ -5,8 +5,10 @@ import numpy as np
 import os
 import pandas as pd
 from ast import literal_eval
+import matplotlib.pyplot as plt
 
 import model_config as config
+
 
 class LearningDataset(Dataset):
 
@@ -21,6 +23,7 @@ class LearningDataset(Dataset):
         self.input = input
         self.output = output
         self.c = conditions
+        self.normalize_data()
 
     def __len__(self):
         return len(self.input)
@@ -32,6 +35,31 @@ class LearningDataset(Dataset):
                   'output': torch.tensor(output), 
                   'c': torch.tensor(self.c)}
         return sample
+    
+    def normalize_data(self):
+        self.input[:, 7:11] *= 0.001
+
+    def plot_data(self):
+        fig, axs = plt.subplots(4,1)
+        axs[0].plot(self.input[:, 0])
+        axs[0].plot(self.input[:, 1])
+        axs[0].plot(self.input[:, 2])
+        axs[0].legend(['vx', 'vy', 'vz'])
+        axs[1].plot(self.input[:, 3])
+        axs[1].plot(self.input[:, 4])
+        axs[1].plot(self.input[:, 5])
+        axs[1].plot(self.input[:, 6])
+        axs[0].legend(['q0', 'q1', 'q2', 'q3'])
+        axs[2].plot(self.input[:, 7])
+        axs[2].plot(self.input[:, 8])
+        axs[2].plot(self.input[:, 9])
+        axs[2].plot(self.input[:, 10])
+        axs[2].legend(['F_motor_1', 'F_motor_1', 'F_motor_2', 'F_motor_3'])
+        axs[3].plot(self.input[:, 0])
+        axs[3].plot(self.input[:, 1])
+        axs[3].plot(self.input[:, 2])
+        axs[3].legend(['F_disturb_x', 'F_disturb_y', 'F_disturb_z'])
+
 
 def load_sim_data(file_name: str) -> np.ndarray:
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -79,7 +107,7 @@ def prepare_loadersets(datasets: list) -> tuple[list, list]:
         a_set.append(a_loader)
     return phi_set, a_set
 
-def prepare_back2back_datasets(menu: list) -> list:
+def prepare_back2back_datasets(menu: list) -> list[LearningDataset]:
     datasets = []
     condition_id = 0    # ID value doesn't matter
     for file in menu:
@@ -117,19 +145,23 @@ def load_back2back_data(file_name: str) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    # dataset = prepare_datasets(["test_sample.csv"])
-    # phi_set, a_set = prepare_loadersets(dataset)
-    # for batch_idx, data_batch in enumerate(phi_set[0]):
-    #     print(f"Batch {batch_idx + 1}:")
-    #     print(f"Data:\n{data_batch}")
-    dataset = prepare_back2back_datasets(['custom_random3_baseline_10wind.csv',
-                                          'custom_random3_baseline_20wind.csv',
-                                          'custom_random3_baseline_30wind.csv',
-                                          'custom_random3_baseline_40wind.csv',
-                                          'custom_random3_baseline_50wind.csv',
-                                          'custom_random3_baseline_nowind.csv'])
+    dataset = prepare_datasets(["test_sample.csv"])
     phi_set, a_set = prepare_loadersets(dataset)
-    for batch_idx, data_batch in enumerate(phi_set[1]):
+    for batch_idx, data_batch in enumerate(phi_set[0]):
         print(f"Batch {batch_idx + 1}:")
         print(f"Data:\n{data_batch}")
+    # dataset = prepare_back2back_datasets(['custom_random3_baseline_10wind.csv',
+    #                                       'custom_random3_baseline_20wind.csv',
+    #                                       'custom_random3_baseline_30wind.csv',
+    #                                       'custom_random3_baseline_40wind.csv',
+    #                                       'custom_random3_baseline_50wind.csv',
+    #                                       'custom_random3_baseline_nowind.csv'])
+    phi_set, a_set = prepare_loadersets(dataset)
+    for batch_idx, data_batch in enumerate(phi_set[0]):
+        print(f"Batch {batch_idx + 1}:")
+        print(f"Data:\n{data_batch}")
+
+    for data in dataset:
+        data.plot_data()
+    plt.show()
 
