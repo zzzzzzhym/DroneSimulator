@@ -10,17 +10,18 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import random_split
 
 import model
-import model_config as config
+import model_config
 import data_manager
 
 class Trainer:
-    def __init__(self) -> None:
-        self.phi_net = model.PhiNet(config.phi_net['dim_of_input'], config.phi_net['dim_of_output'])
-        self.h_net = model.HNet(config.h_net['dim_of_input'], config.h_net['dim_of_output'])
+    def __init__(self, config: model_config.ModelConfig) -> None:
+        self.config = config
+        self.phi_net = model.PhiNet(config.phi_net)
+        self.h_net = model.HNet(config.h_net)
         self.criterion = nn.MSELoss()
         self.criterion_h = nn.CrossEntropyLoss()
-        self.optimizer_h = optim.Adam(self.h_net.parameters(), lr=config.training['learning_rate'])
-        self.optimizer_phi = optim.Adam(self.phi_net.parameters(), lr=config.training['learning_rate'])
+        self.optimizer_h = optim.Adam(self.h_net.parameters(), lr=config.trainer.learning_rate)
+        self.optimizer_phi = optim.Adam(self.phi_net.parameters(), lr=config.trainer.learning_rate)
         # initialization
         self.optimizer_phi.zero_grad()
         self.h_net.zero_grad()
@@ -30,8 +31,7 @@ class Trainer:
         self.loss_phi_trace = []
         self.loss_h_trace = []
 
-    @staticmethod
-    def get_optimal_a(phi: torch.Tensor, ground_truth):
+    def get_optimal_a(self, phi: torch.Tensor, ground_truth):
         """
         phi*a = labels
         a = inv(phi_t*phi)*phi_t*labels
@@ -49,22 +49,21 @@ class Trainer:
         if torch.norm(a, 'fro') < 0.00001:
             raise ValueError("a is too small")
         else:
-            a = a / torch.norm(a, 'fro') * config.training['gamma']
+            a = a / torch.norm(a, 'fro') * self.config.trainer.gamma
         return a
 
     @staticmethod
     def get_prediction(phi, a):
         return torch.mm(phi, a)
     
-    @staticmethod
-    def can_train_h_net() -> bool:
+    def can_train_h_net(self) -> bool:
         """randomly insert h_net training"""
-        can_do = np.random.rand() <= 1.0 / config.training['frequency_h']
+        can_do = np.random.rand() <= 1.0 / self.config.trainer.frequency_h
         return can_do
 
     def step_training(self, epoch: int) -> tuple[float, float]:
         # Randomize the order in which we train over the subdatasets
-        randomized_cases = np.arange(config.num_of_conditions)
+        randomized_cases = np.arange(self.config.num_of_conditions)
         np.random.shuffle(randomized_cases)
         
         loss_phi_sum = 0.0
@@ -78,7 +77,7 @@ class Trainer:
             a = self.get_optimal_a(phi_output, batch_phi['output'])
             prediction = self.get_prediction(phi_output, a)
             loss_h = self.criterion_h(self.h_net(phi_output), batch_phi['c'])
-            loss_phi = self.criterion(prediction, batch_phi['output']) - config.training['alpha']*loss_h
+            loss_phi = self.criterion(prediction, batch_phi['output']) - self.config.trainer.alpha*loss_h
             loss_phi.backward()
             self.optimizer_phi.step()
 
@@ -92,13 +91,13 @@ class Trainer:
             '''
             Spectral normalization
             '''
-            if config.training['SN'] > 0:
+            if self.config.trainer.SN > 0:
                 for param in self.phi_net.parameters():
                     M = param.detach().numpy()
                     if M.ndim > 1:
                         s = np.linalg.norm(M, 2)
-                        if s > config.training['SN']:
-                            param.data = param / s * config.training['SN']
+                        if s > self.config.trainer.SN:
+                            param.data = param / s * self.config.trainer.SN
             '''
             record loss trace
             '''
@@ -107,32 +106,36 @@ class Trainer:
         return loss_phi_sum, loss_h_sum
 
 
-    def train_model(self, data_files: list):
-        self.dataset = data_manager.prepare_datasets(data_files)
-        # self.dataset = data_manager.prepare_back2back_datasets(data_files)
-        self.loaderset_phi, self.loaderset_a = data_manager.prepare_loadersets(self.dataset)
+    def train_model(self, data_files: list, is_back2back=False):
+        if is_back2back:
+            self.dataset = data_manager.prepare_back2back_datasets(data_files)
+        else:
+            self.dataset = data_manager.prepare_datasets(data_files)
+        self.loaderset_phi, self.loaderset_a = data_manager.prepare_loadersets(self.dataset, self.config.trainer)
         self.loss_phi_trace = []
         self.loss_h_trace = []
-        # for epoch in range(config.training['num_epochs']):
-        for epoch in range(1000):
+        for epoch in range(self.config.trainer.num_epochs):
             loss_phi, loss_h = self.step_training(epoch)
-            self.loss_phi_trace.append(loss_phi/config.num_of_conditions)
-            self.loss_h_trace.append(loss_h/config.num_of_conditions)
+            self.loss_phi_trace.append(loss_phi/self.config.num_of_conditions)
+            self.loss_h_trace.append(loss_h/self.config.num_of_conditions)
             if epoch % 100 == 0:
                 print('[%d] loss_f: %.2f loss_c: %.2f' % (epoch + 1, self.loss_phi_trace[-1], self.loss_h_trace[-1]))
     
-    def verify_model(self):
+    def verify_model(self, test_data: list[str], is_back2back=False):
         self.phi_net.eval()
         with torch.no_grad():
-            phi_out = self.phi_net(torch.tensor(self.dataset[0].input))
+            if is_back2back:
+                phi_out = self.phi_net(torch.tensor(data_manager.prepare_back2back_datasets(test_data)[0].input))
+            else:
+                phi_out = self.phi_net(torch.tensor(data_manager.prepare_datasets(test_data)[0].input))
             groundtruth = torch.tensor(self.dataset[0].output)
             a = self.get_optimal_a(phi_out, groundtruth)
             prediction = self.get_prediction(phi_out, a)
             error = groundtruth - prediction
+        self.plot_prediction_error(error, groundtruth, prediction)
         return error, groundtruth, prediction
 
-    def plot_prediction_error(self):
-        error, groundtruth, prediction = self.verify_model()
+    def plot_prediction_error(self, error, groundtruth, prediction):
         fig, axs = plt.subplots(3, 2)
         axs[0, 0].plot(groundtruth[:, 0])
         axs[1, 0].plot(groundtruth[:, 1])
@@ -159,16 +162,23 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    trainer = Trainer()
-    trainer.train_model(["test_air_drag_0.csv"])
-    # trainer.train_model(['custom_random3_baseline_10wind.csv',
-    #                      'custom_random3_baseline_20wind.csv',
-    #                      'custom_random3_baseline_30wind.csv',
-    #                      'custom_random3_baseline_40wind.csv',
-    #                      'custom_random3_baseline_50wind.csv',
-    #                      'custom_random3_baseline_nowind.csv'])
+    # data_list = ["test_air_drag_0.csv", "test_air_drag_1.csv"]
+    # config = model_config.ModelConfig(len(data_list))
+    # trainer = Trainer(config)
+    # trainer.train_model(data_list)
+
+    data_list = ['custom_random3_baseline_10wind.csv',
+                'custom_random3_baseline_20wind.csv',
+                'custom_random3_baseline_30wind.csv',
+                'custom_random3_baseline_40wind.csv',
+                'custom_random3_baseline_50wind.csv',
+                'custom_random3_baseline_nowind.csv']
+    config = model_config.ModelConfig(len(data_list))
+    trainer = Trainer(config)
+    trainer.train_model(data_list, True)
+
     trainer.plot_loss()
-    trainer.plot_prediction_error()
+    trainer.verify_model(['custom_random3_baseline_10wind.csv'], True)
     plt.show()
 
 

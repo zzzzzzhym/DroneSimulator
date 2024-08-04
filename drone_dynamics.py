@@ -81,13 +81,15 @@ class DroneDynamics:
     def step_state_vector(self, y_0: np.ndarray, t: float) -> np.ndarray:
         t_start = t
         t_end = t + self.dt
-        t_start = 0
-        t_end = 0 + self.dt
+        # t_start = 0
+        # t_end = 0 + self.dt
         result = solve_ivp(self.get_derivatives_from_eom, 
                            (t_start, t_end), 
                            y_0, 
                            method = 'RK45', 
                            t_eval=[t_end])
+        if not result.success:
+            raise ValueError(result.message)
         return result.y.reshape(-1)    # convert an nx1 matrix to 1xn vector
 
     def step_disturbance_force(self, t: float, state: np.ndarray):

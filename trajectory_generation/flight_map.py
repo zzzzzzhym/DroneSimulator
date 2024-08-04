@@ -131,10 +131,9 @@ def read_flight_map(file_name: str) -> FlightMap:
         raise ValueError("File not exist: " + file_path)
         
 def construct_map_from_subtrajs(file_name_prefix: str, num_of_subtrajs: int) -> FlightMap:
-    file_name_suffix = ".pkl"
     subtrajs = []
     for i in range(num_of_subtrajs):
-        file_name = file_name_prefix + str(i) + file_name_suffix
+        file_name = trajectory_logger.randomly_picked_a_trajectory()
         subtrajs.append(trajectory_logger.read_trajectory(file_name))
     return FlightMap(subtrajs)
 

@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 
 import drone_simulation
 
@@ -23,4 +24,5 @@ def construct_csv_array(sim_data: drone_simulation.DroneSimulator) -> tuple[str,
 if __name__ == "__main__":
     sim_test = drone_simulation.DroneSimulator()
     sim_test.run_simulation(120)
-    log_sim_result(sim_test, "test_air_drag_0.csv")    
+    log_sim_result(sim_test, "test_air_drag_2.csv")    
+    plt.show()

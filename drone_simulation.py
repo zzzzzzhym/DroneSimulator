@@ -559,5 +559,5 @@ def prepare_drone_pose_plot(position: np.ndarray, pose: np.ndarray) -> tuple[np.
 
 if __name__ == "__main__":
     sim_test = DroneSimulator()
-    sim_test.run_simulation(10)
+    sim_test.run_simulation(120)
     plt.show()

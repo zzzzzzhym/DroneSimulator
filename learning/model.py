@@ -6,18 +6,18 @@ torch.set_default_tensor_type('torch.DoubleTensor')
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import random_split
 
-import model_config as config
+import model_config as model_config
 
 
 class PhiNet(nn.Module):
     """Follow NeuroFly Nomenclature"""
-    def __init__(self, dim_of_input, dim_of_output):
+    def __init__(self, config: model_config.ModelConfig.PhiNet):
         super().__init__()
-        self.fc1 = nn.Linear(dim_of_input, config.phi_net['dim_of_layer0'])
-        self.fc2 = nn.Linear(config.phi_net['dim_of_layer0'], config.phi_net['dim_of_layer1'])
-        self.fc3 = nn.Linear(config.phi_net['dim_of_layer1'], config.phi_net['dim_of_layer2'])
+        self.fc1 = nn.Linear(config.dim_of_input, config.dim_of_layer0)
+        self.fc2 = nn.Linear(config.dim_of_layer0, config.dim_of_layer1)
+        self.fc3 = nn.Linear(config.dim_of_layer1, config.dim_of_layer2)
         # One of the NN outputs is a constant bias term, which is append below
-        self.fc4 = nn.Linear(config.phi_net['dim_of_layer2'], config.phi_net['dim_of_output'] - 1)
+        self.fc4 = nn.Linear(config.dim_of_layer2, config.dim_of_output - 1)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -34,10 +34,10 @@ class PhiNet(nn.Module):
 
 class HNet(nn.Module):
     """Follow NeuroFly Nomenclature"""
-    def __init__(self, dim_of_input, dim_of_output):
+    def __init__(self, config: model_config.ModelConfig.HNet):
         super().__init__()
-        self.fc1 = nn.Linear(dim_of_input, config.h_net['dim_of_layer0'])
-        self.fc2 = nn.Linear(config.h_net['dim_of_layer0'], dim_of_output)
+        self.fc1 = nn.Linear(config.dim_of_input, config.dim_of_layer0)
+        self.fc2 = nn.Linear(config.dim_of_layer0, config.dim_of_output)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))

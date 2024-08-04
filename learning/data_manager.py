@@ -7,7 +7,7 @@ import pandas as pd
 from ast import literal_eval
 import matplotlib.pyplot as plt
 
-import model_config as config
+import model_config
 
 
 class LearningDataset(Dataset):
@@ -79,13 +79,13 @@ def convert_sim_to_training_data(sim_data: np.ndarray, label: int) -> LearningDa
     result = LearningDataset(input, output, label)
     return result
 
-def get_data_loaders(training_data: LearningDataset) -> tuple[DataLoader, DataLoader]:
+def get_data_loaders(training_data: LearningDataset, config: model_config.ModelConfig.Trainer) -> tuple[DataLoader, DataLoader]:
     length = len(training_data)
     part1 = int(length*2/3)
     part2 = length - int(length*2/3)
     phi_set, a_set = random_split(training_data, [part1, part2])
-    phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=config.training['phi_shot'], shuffle=True)
-    a_loader = torch.utils.data.DataLoader(a_set, batch_size=config.training['a_shot'], shuffle=True)
+    phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=config.phi_shot, shuffle=True)
+    a_loader = torch.utils.data.DataLoader(a_set, batch_size=config.a_shot, shuffle=True)
     return phi_loader, a_loader
 
 def prepare_datasets(menu: list) -> list:
@@ -98,11 +98,11 @@ def prepare_datasets(menu: list) -> list:
         datasets.append(dataset)
     return datasets
 
-def prepare_loadersets(datasets: list) -> tuple[list, list]:
+def prepare_loadersets(datasets: list, config: model_config.ModelConfig.Trainer) -> tuple[list, list]:
     phi_set = []
     a_set = []
     for data in datasets:
-        phi_loader, a_loader = get_data_loaders(data)
+        phi_loader, a_loader = get_data_loaders(data, config)
         phi_set.append(phi_loader)
         a_set.append(a_loader)
     return phi_set, a_set
