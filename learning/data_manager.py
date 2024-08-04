@@ -7,7 +7,7 @@ import pandas as pd
 from ast import literal_eval
 import matplotlib.pyplot as plt
 
-import model_config as config
+import model_config
 
 
 class LearningDataset(Dataset):
@@ -37,7 +37,11 @@ class LearningDataset(Dataset):
         return sample
     
     def normalize_data(self):
-        self.input[:, 7:11] *= 0.001
+        self.input[:, 7:11] *= 1
+        self.input[:, 3:7] *= 1
+        self.input[:, 0:3] *= 1
+
+        self.output[:,0:3] *= 1
 
     def plot_data(self):
         fig, axs = plt.subplots(4,1)
@@ -49,15 +53,15 @@ class LearningDataset(Dataset):
         axs[1].plot(self.input[:, 4])
         axs[1].plot(self.input[:, 5])
         axs[1].plot(self.input[:, 6])
-        axs[0].legend(['q0', 'q1', 'q2', 'q3'])
+        axs[1].legend(['q0', 'q1', 'q2', 'q3'])
         axs[2].plot(self.input[:, 7])
         axs[2].plot(self.input[:, 8])
         axs[2].plot(self.input[:, 9])
         axs[2].plot(self.input[:, 10])
         axs[2].legend(['F_motor_1', 'F_motor_1', 'F_motor_2', 'F_motor_3'])
-        axs[3].plot(self.input[:, 0])
-        axs[3].plot(self.input[:, 1])
-        axs[3].plot(self.input[:, 2])
+        axs[3].plot(self.output[:, 0])
+        axs[3].plot(self.output[:, 1])
+        axs[3].plot(self.output[:, 2])
         axs[3].legend(['F_disturb_x', 'F_disturb_y', 'F_disturb_z'])
 
 
@@ -74,21 +78,24 @@ def load_sim_data(file_name: str) -> np.ndarray:
         raise ValueError("No such file: " + file_path)
 
 def convert_sim_to_training_data(sim_data: np.ndarray, label: int) -> LearningDataset:
-    input = sim_data[:, 0:(3+4+4)]
-    output = sim_data[:, (3+4+4):] # disturbance force
-    result = LearningDataset(input, output, label)
+    v = sim_data[:, 0:3]    # velocity
+    q = sim_data[:, 3:7]    # quaternion
+    f = sim_data[:, 7:11]   # motor force
+    fd = sim_data[:, 11:]   # disturbance force
+    input = np.hstack([v, q, f])
+    result = LearningDataset(input, fd, label)
     return result
 
-def get_data_loaders(training_data: LearningDataset) -> tuple[DataLoader, DataLoader]:
+def get_data_loaders(training_data: LearningDataset, config: model_config.ModelConfig.Trainer) -> tuple[DataLoader, DataLoader]:
     length = len(training_data)
     part1 = int(length*2/3)
     part2 = length - int(length*2/3)
     phi_set, a_set = random_split(training_data, [part1, part2])
-    phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=config.training['phi_shot'], shuffle=True)
-    a_loader = torch.utils.data.DataLoader(a_set, batch_size=config.training['a_shot'], shuffle=True)
+    phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=config.phi_shot, shuffle=True)
+    a_loader = torch.utils.data.DataLoader(a_set, batch_size=config.a_shot, shuffle=True)
     return phi_loader, a_loader
 
-def prepare_datasets(menu: list) -> list:
+def prepare_datasets(menu: list) -> list[LearningDataset]:
     datasets = []
     condition_id = 0    # ID value doesn't matter
     for file in menu:
@@ -98,11 +105,11 @@ def prepare_datasets(menu: list) -> list:
         datasets.append(dataset)
     return datasets
 
-def prepare_loadersets(datasets: list) -> tuple[list, list]:
+def prepare_loadersets(datasets: list, config: model_config.ModelConfig.Trainer) -> tuple[list, list]:
     phi_set = []
     a_set = []
     for data in datasets:
-        phi_loader, a_loader = get_data_loaders(data)
+        phi_loader, a_loader = get_data_loaders(data, config)
         phi_set.append(phi_loader)
         a_set.append(a_loader)
     return phi_set, a_set
@@ -145,8 +152,9 @@ def load_back2back_data(file_name: str) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    dataset = prepare_datasets(["test_sample.csv"])
-    phi_set, a_set = prepare_loadersets(dataset)
+    data_list = ["test_air_drag_0.csv"]
+    dataset: list[LearningDataset] = prepare_datasets(data_list)
+    phi_set, a_set = prepare_loadersets(dataset, model_config.ModelConfig(len(data_list)).Trainer)
     for batch_idx, data_batch in enumerate(phi_set[0]):
         print(f"Batch {batch_idx + 1}:")
         print(f"Data:\n{data_batch}")
@@ -156,10 +164,6 @@ if __name__ == "__main__":
     #                                       'custom_random3_baseline_40wind.csv',
     #                                       'custom_random3_baseline_50wind.csv',
     #                                       'custom_random3_baseline_nowind.csv'])
-    phi_set, a_set = prepare_loadersets(dataset)
-    for batch_idx, data_batch in enumerate(phi_set[0]):
-        print(f"Batch {batch_idx + 1}:")
-        print(f"Data:\n{data_batch}")
 
     for data in dataset:
         data.plot_data()

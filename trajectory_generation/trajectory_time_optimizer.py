@@ -106,11 +106,7 @@ if __name__ == "__main__":
     time_span = 5.0
     waypoints = waypoint.Waypoint(points, time_span)
 
-    init_velocity = np.array([0,0,0])
-    init_acceleration = np.array([0,0,0])
-    end_velocity = np.array([0,0,0])
-    end_acceleration = np.array([0,0,0])
-    config = trajectory_config.TrajectoryConfig(5, init_velocity, init_acceleration, end_velocity, end_acceleration)
+    config = trajectory_config.TrajectoryConfig(order_of_polynomial=6)
 
     new_waypoints, new_trajectory = find_trajectory_with_optimal_time(waypoints, config)
     new_trajectory.plot_trajectory()

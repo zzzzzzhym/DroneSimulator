@@ -16,7 +16,8 @@ class FlightMap:
         self.stitch_subtrajs()
 
     def read_data_by_time(self, t) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        t_clamped = min(self.subtrajs[-1].waypoints.waypoint_time_stamp[-1] + self.t_offset[-1], t)
+        # t_clamped = min(self.subtrajs[-1].waypoints.waypoint_time_stamp[-1] + self.t_offset[-1], t)
+        t_clamped = np.clip(t, a_max=self.subtrajs[-1].waypoints.waypoint_time_stamp[-1] + self.t_offset[-1], a_min=None)
         i_subtraj = self.find_subtrajs(t_clamped)
         selected_subtraj = self.subtrajs[i_subtraj]
         t_adjusted = t_clamped - self.t_offset[i_subtraj]
@@ -41,8 +42,9 @@ class FlightMap:
         
     def find_subtrajs(self, t) -> int:
         i = np.searchsorted(self.t_offset, t) - 1
-        i = min(self.total_num_of_subtrajs - 1, i)
-        i = max(0, i)
+        i = np.clip(i, a_min=0, a_max=self.total_num_of_subtrajs - 1)
+        # i = min(self.total_num_of_subtrajs - 1, i)
+        # i = max(0, i)
         return i
         
     def find_sections(self, t, trajectory: trajectory_generator_qp.TrajectoryGenerator) -> int:
@@ -93,6 +95,14 @@ class FlightMap:
         axs[0, 4].plot(t_span, x_dot4_trace[:, 0])
         axs[1, 4].plot(t_span, x_dot4_trace[:, 1])
         axs[2, 4].plot(t_span, x_dot4_trace[:, 2])
+        axs[0, 0].set_ylabel('X')
+        axs[1, 0].set_ylabel('Y')
+        axs[2, 0].set_ylabel('Z')
+        axs[2, 0].set_xlabel('x')
+        axs[2, 1].set_xlabel('x_dot')
+        axs[2, 2].set_xlabel('x_dot2')
+        axs[2, 3].set_xlabel('x_dot3')
+        axs[2, 4].set_xlabel('x_dot4')
 
         fig1, axs1 = plt.subplots(1, 1, sharex=True)
         axs1 = fig1.add_subplot(111, projection='3d')
@@ -130,18 +140,23 @@ def read_flight_map(file_name: str) -> FlightMap:
     else:
         raise ValueError("File not exist: " + file_path)
         
-def construct_map_from_subtrajs(file_name_prefix: str, num_of_subtrajs: int) -> FlightMap:
-    file_name_suffix = ".pkl"
+def construct_map_with_subtrajs(is_random=True, num_of_subtrajs: int=0, subtraj_id: list[int]=[]) -> FlightMap:
     subtrajs = []
-    for i in range(num_of_subtrajs):
-        file_name = file_name_prefix + str(i) + file_name_suffix
-        subtrajs.append(trajectory_logger.read_trajectory(file_name))
+    if is_random:
+        for i in range(num_of_subtrajs):
+            file_name = trajectory_logger.pick_a_trajectory()
+            subtrajs.append(trajectory_logger.read_trajectory(file_name))
+    else:
+        for i in subtraj_id:
+            file_name = trajectory_logger.pick_a_trajectory(i)
+            subtrajs.append(trajectory_logger.read_trajectory(file_name))
     return FlightMap(subtrajs)
 
 if __name__ == "__main__":
-    file_name_prefix = "5_random_wp_map_"
-    constructed_map = construct_map_from_subtrajs(file_name_prefix, 24)
-    write_flight_map(constructed_map, "random_wp_map_2min.pkl")
-    map_reload = read_flight_map("random_wp_map_2min.pkl")
+    constructed_map = construct_map_with_subtrajs(is_random=False, subtraj_id=[21,22,23])
+    write_flight_map(constructed_map, "specified_wp_map_3sub.pkl")
+    # constructed_map = construct_map_with_subtrajs(num_of_subtrajs=3)
+    # write_flight_map(constructed_map, "random_wp_map_3sub.pkl")
+    map_reload = read_flight_map("specified_wp_map_3sub.pkl")
     map_reload.plot_stitched_traj()
     plt.show()
