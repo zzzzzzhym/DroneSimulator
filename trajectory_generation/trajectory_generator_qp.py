@@ -7,7 +7,7 @@ from qpth.qp import QPFunction
 from scipy.linalg import block_diag
 import matplotlib.pyplot as plt
 import copy
-
+from enum import Enum, auto
 
 import trajectory_config
 import waypoint
@@ -16,6 +16,21 @@ import polynomial
 
 solver_collection = {'cvxopt', 'cvxpy', 'qpfunction'}
 which_solver = 'cvxopt'
+
+class Dim(Enum):
+    """Dimension of a 3D trajectory"""
+    X = 0
+    Y = 1
+    Z = 2
+
+class KinematicVars(Enum):
+    """Kinematic variables"""
+    Position = 0
+    Velocity = 1
+    Acceleration = 2
+    Jerk = 3
+    Snap = 4
+
 
 class UnitCoeffPolynomialUtils:
     def __init__(self, order_of_polynomial: int) -> None:
@@ -35,11 +50,11 @@ class TrajectoryGenerator:
     def __init__(self, config: trajectory_config.TrajectoryConfig, waypoints: waypoint.Waypoint) -> None:
         self.config = config
         self.waypoints = copy.deepcopy(waypoints)
-        self.corridor_width = 0.01
+        self.corridor_width = 0.2
         # self.waypoints.insert_middle_waypoints(self.corridor_width)
         self.number_of_polynomial_terms = self.config.order_of_polynomial + 1
         self.position_profiles = np.zeros((3, self.waypoints.number_of_sections, self.number_of_polynomial_terms))
-        self.profiles = []
+        self.profiles: list[list[polynomial.Polynomial]] = []
         self.cost = np.array([-1, -1, -1])
         self.time_shift = self.get_time_shift(self.waypoints)
         # private utils
@@ -60,20 +75,26 @@ class TrajectoryGenerator:
 
     def get_trajectory(self):
         self.initialize_profiles()
-        for component in [0, 1, 2]:
-            self.position_profiles[component], self.cost[component] = self.optimize_component_of_profile(self.waypoints.coordinates[:,component],
-                                                                                   self.config.initial_velocity[component],
-                                                                                   self.config.initial_acceleration[component],
-                                                                                   self.config.terminal_velocity[component],
-                                                                                   self.config.terminal_acceleration[component])
+        for dim in Dim:
+            self.position_profiles[dim.value], self.cost[dim.value] = self.optimize_1d_profile(self.waypoints.coordinates[:,dim.value],
+                                                                                   self.config.initial_velocity[dim.value],
+                                                                                   self.config.initial_acceleration[dim.value],
+                                                                                   self.config.initial_jerk[dim.value],
+                                                                                   self.config.terminal_velocity[dim.value],
+                                                                                   self.config.terminal_acceleration[dim.value],
+                                                                                   self.config.terminal_jerk[dim.value])
         self.construct_profiles(self.position_profiles)
-        # self.plot_trajectory()
 
     def construct_profiles(self, position_profiles):
+        """get the derivatives of the given profile and save them to the attribute 
+
+        Args:
+            position_profiles (_type_): _description_
+        """
         for component in [0, 1, 2]:
             sub_list = []
             for position_polynomial in position_profiles[component]:
-                profile = polynomial.Polynomial(position_polynomial, 2)
+                profile = polynomial.Polynomial(position_polynomial, 3)
                 sub_list.append(profile)
             self.profiles.append(sub_list)
 
@@ -114,10 +135,12 @@ class TrajectoryGenerator:
         return q, p
 
     def get_equality_constraint_matrices(self, component_of_waypoints: np.ndarray,
-                                         init_velocity_component: float, 
-                                         init_acceleration_component: float, 
-                                         end_velocity_component: float, 
-                                         end_acceleration_component: float) -> tuple[np.ndarray, np.ndarray]:
+                                         init_velocity: float, 
+                                         init_acceleration: float, 
+                                         init_jerk: float, 
+                                         end_velocity: float, 
+                                         end_acceleration: float,
+                                         end_jerk: float,) -> tuple[np.ndarray, np.ndarray]:
         '''
         Ax + b = 0
         a: A
@@ -133,10 +156,13 @@ class TrajectoryGenerator:
         b = np.append(b, component_of_waypoints[0])
         coeff = self.coeff_utils.position.get_lumped_coefficient(1, self.waypoints.waypoint_time_stamp[0])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, 0)))
-        b = np.append(b, init_velocity_component)
+        b = np.append(b, init_velocity)
         coeff = self.coeff_utils.position.get_lumped_coefficient(2, self.waypoints.waypoint_time_stamp[0])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, 0)))
-        b = np.append(b, init_acceleration_component)
+        b = np.append(b, init_acceleration)
+        coeff = self.coeff_utils.position.get_lumped_coefficient(3, self.waypoints.waypoint_time_stamp[0])
+        a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, 0)))
+        b = np.append(b, init_jerk)
         # terminal state
         # position
         coeff = self.coeff_utils.position.get_lumped_coefficient(0, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
@@ -145,11 +171,14 @@ class TrajectoryGenerator:
         # velocity      
         coeff = self.coeff_utils.position.get_lumped_coefficient(1, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, self.waypoints.number_of_sections - 1)))
-        b = np.append(b, end_velocity_component)
+        b = np.append(b, end_velocity)
         # accel
         coeff = self.coeff_utils.position.get_lumped_coefficient(2, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
         a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, self.waypoints.number_of_sections - 1)))
-        b = np.append(b, end_acceleration_component)
+        b = np.append(b, end_acceleration)
+        coeff = self.coeff_utils.position.get_lumped_coefficient(3, self.waypoints.waypoint_time_stamp[-1] - self.time_shift[-1])
+        a = np.vstack((a, self.load_row_of_a(row_length_of_a, coeff, self.waypoints.number_of_sections - 1)))
+        b = np.append(b, end_jerk)
 
         # continuity constraint (position)
         for section_index in range(self.waypoints.number_of_sections - 1):
@@ -225,18 +254,36 @@ class TrajectoryGenerator:
         col_end = (self.config.order_of_polynomial + 1)*(section_index + 1)
         return col_start, col_end
 
-    def optimize_vector_of_profile(self, component_of_waypoints: np.ndarray,
-                                   init_velocity_component: float, 
-                                   init_acceleration_component: float, 
-                                   end_velocity_component: float, 
-                                   end_acceleration_component: float) -> tuple[np.ndarray, float]:
+    def optimize_vectorized_1d_profile(self, component_of_waypoints: np.ndarray,
+                                   init_velocity: float, 
+                                   init_acceleration: float, 
+                                   init_jerk: float, 
+                                   end_velocity: float, 
+                                   end_acceleration: float,
+                                   end_jerk: float) -> tuple[np.ndarray, float]:
+        """core optimization method to optimize a 1D profile
+
+        Args:
+            component_of_waypoints (np.ndarray): _description_
+            init_velocity (float): _description_
+            init_acceleration (float): _description_
+            init_jerk (float): _description_
+            end_velocity (float): _description_
+            end_acceleration (float): _description_
+            end_jerk (float): _description_
+
+        Returns:
+            tuple[np.ndarray, float]: vectorized result, cost
+        """
         # arg_x min(1/2*x.T*Q*x + p*x)
         q, p = self.get_cost_matrices()
         a, b = self.get_equality_constraint_matrices(component_of_waypoints,
-                                                     init_velocity_component, 
-                                                     init_acceleration_component,
-                                                     end_velocity_component, 
-                                                     end_acceleration_component)
+                                                     init_velocity, 
+                                                     init_acceleration,
+                                                     init_jerk,
+                                                     end_velocity, 
+                                                     end_acceleration,
+                                                     end_jerk)
         g, h = self.get_inequality_constraint_matrices(component_of_waypoints)
         # g, h = (None, None)
         epsilon = 1e-6
@@ -283,35 +330,51 @@ class TrajectoryGenerator:
             return x, (x.T@q@x)
             
 
-    def optimize_component_of_profile(self, component_of_waypoints: np.ndarray, 
-                        init_velocity_component: float, 
-                        init_acceleration_component: float, 
-                        end_velocity_component: float, 
-                        end_acceleration_component: float) -> np.ndarray:
-        packed_result, cost = self.optimize_vector_of_profile(component_of_waypoints,
-                                                        init_velocity_component, 
-                                                        init_acceleration_component,
-                                                        end_velocity_component, 
-                                                        end_acceleration_component) 
+    def optimize_1d_profile(self, component_of_waypoints: np.ndarray, 
+                        init_velocity: float, 
+                        init_acceleration: float, 
+                        init_jerk: float, 
+                        end_velocity: float, 
+                        end_acceleration: float,
+                        end_jerk: float) -> tuple[np.ndarray, float]:
+        """optimize a 1D profile
+
+        Args:
+            component_of_waypoints (np.ndarray): _description_
+            init_velocity (float): _description_
+            init_acceleration (float): _description_
+            end_velocity (float): _description_
+            end_acceleration (float): _description_
+
+        Returns:
+            tuple[np.ndarray, float]: optimized profile, cost
+        """
+        packed_result, cost = self.optimize_vectorized_1d_profile(component_of_waypoints,
+                                                        init_velocity, 
+                                                        init_acceleration,
+                                                        init_jerk,
+                                                        end_velocity, 
+                                                        end_acceleration, 
+                                                        end_jerk) 
         # todo check constraint violation
 
         return self.unpack_vector_to_component_profile(packed_result), cost
 
     def plot_trajectory(self):
-        fig, axs = plt.subplots(1, 1, sharex=True)
+        fig0, axs0 = plt.subplots(1, 1, sharex=True)
         # Use projection='3d' for 3D plots
-        axs = fig.add_subplot(111, projection='3d')
-        for i in range(self.waypoints.number_of_sections):
-            t_samples = np.linspace(self.waypoints.waypoint_time_stamp[i], self.waypoints.waypoint_time_stamp[i+1], 21)
+        axs0 = fig0.add_subplot(111, projection='3d')
+        for section in range(self.waypoints.number_of_sections):
+            t_samples = np.linspace(self.waypoints.waypoint_time_stamp[section], self.waypoints.waypoint_time_stamp[section+1], 21)
             x = np.empty((0,))
             y = np.empty((0,))
             z = np.empty((0,))
             for t in t_samples:
-                x = np.append(x, self.profiles[0][i].sample_polynomial(0, t - self.time_shift[i]))
-                y = np.append(y, self.profiles[1][i].sample_polynomial(0, t - self.time_shift[i]))
-                z = np.append(z, self.profiles[2][i].sample_polynomial(0, t - self.time_shift[i]))
-            axs.plot3D(x,y,z)
-        axs.plot3D(self.waypoints.coordinates[:, 0],
+                x = np.append(x, self.profiles[0][section].sample_polynomial(0, t - self.time_shift[section]))
+                y = np.append(y, self.profiles[1][section].sample_polynomial(0, t - self.time_shift[section]))
+                z = np.append(z, self.profiles[2][section].sample_polynomial(0, t - self.time_shift[section]))
+            axs0.plot3D(x,y,z)
+        axs0.plot3D(self.waypoints.coordinates[:, 0],
                    self.waypoints.coordinates[:, 1],
                    self.waypoints.coordinates[:, 2], '.', c='blue', label='Points')
         # for coordinate in self.waypoints.coordinates:
@@ -320,40 +383,24 @@ class TrajectoryGenerator:
         #                cubic_profile[:, 1],
         #                cubic_profile[:, 2], 
         #                'o', c='green', label='Points')
-        axs.set_title('3D Plot')
-        axs.set_xlabel('X')
-        axs.set_ylabel('Y')
-        axs.set_zlabel('Z')
-        axs.axis('equal')            
-        fig3, axs3 = plt.subplots(3, 2, sharex=True)
-        for i in range(self.waypoints.number_of_sections):
-            t_samples = np.linspace(self.waypoints.waypoint_time_stamp[i], self.waypoints.waypoint_time_stamp[i+1], 11)
-            x = np.empty((0,))
-            y = np.empty((0,))
-            z = np.empty((0,))
-            for t in t_samples:
-                x = np.append(x, self.profiles[0][i].sample_polynomial(1, t - self.time_shift[i]))
-                y = np.append(y, self.profiles[1][i].sample_polynomial(1, t - self.time_shift[i]))
-                z = np.append(z, self.profiles[2][i].sample_polynomial(1, t - self.time_shift[i]))
-            axs3[0, 0].plot(t_samples, x)
-            axs3[1, 0].plot(t_samples, y)
-            axs3[2, 0].plot(t_samples, z)
-            axs3[0, 0].set_title("vx")
-            axs3[1, 0].set_title("vy")
-            axs3[2, 0].set_title("vz")
-            x = np.empty((0,))
-            y = np.empty((0,))
-            z = np.empty((0,))
-            for t in t_samples:
-                x = np.append(x, self.profiles[0][i].sample_polynomial(2, t - self.time_shift[i]))
-                y = np.append(y, self.profiles[1][i].sample_polynomial(2, t - self.time_shift[i]))
-                z = np.append(z, self.profiles[2][i].sample_polynomial(2, t - self.time_shift[i]))
-            axs3[0, 1].plot(t_samples, x)
-            axs3[1, 1].plot(t_samples, y)
-            axs3[2, 1].plot(t_samples, z)
-            axs3[0, 1].set_title("ax")
-            axs3[1, 1].set_title("ay")
-            axs3[2, 1].set_title("az")
+        axs0.set_title('3D Plot')
+        axs0.set_xlabel('X')
+        axs0.set_ylabel('Y')
+        axs0.set_zlabel('Z')
+        axs0.axis('equal')            
+        fig1, axs1 = plt.subplots(len(Dim), len(KinematicVars)-1, sharex=True)
+        for section in range(self.waypoints.number_of_sections):
+            t_samples = np.linspace(self.waypoints.waypoint_time_stamp[section], self.waypoints.waypoint_time_stamp[section+1], 11)
+            for kin_var in list(KinematicVars)[:-1]:
+                data = np.empty((len(Dim),0))
+                for t in t_samples:
+                    new_data_col = np.zeros((len(Dim),1))
+                    for dim in Dim:
+                        new_data_col[dim.value] = self.profiles[dim.value][section].sample_polynomial(kin_var.value, t - self.time_shift[section])
+                    data = np.hstack((data, new_data_col))
+                for dim in Dim:
+                    axs1[dim.value, kin_var.value].plot(t_samples, data[dim.value])
+                    axs1[dim.value, kin_var.value].set_ylabel(kin_var.name + dim.name)
 
 def get_cubic_profile(center_coordinate: np.ndarray, half_side_length: float) -> np.ndarray:
     result = np.empty((0,3))
@@ -371,31 +418,27 @@ if __name__ == "__main__":
     util_instance = UnitCoeffPolynomialUtils(5)
     print(util_instance.position.induced_coeff)
 
-    points = (np.array([[0, 0, 0],
-                    [1, 2, 0],
-                    [2, 0, 0],
-                    [4, 5, 0],
-                    [5, 2, 0]]))
-    time_span = 5.0
+    # points = (np.array([[0, 0, 0],
+    #                 [1, 2, 0],
+    #                 [2, 0, 0],
+    #                 [4, 5, 0],
+    #                 [5, 2, 0]]))
+    # time_span = 5.0
 
     points = np.array([ [ 0.        ,  0.        ,  0.        ],
                         [ 1.98436524,  0.00979175,  1.89768274],
                         [ 1.07734423,  2.24543732,  5.5656538 ],
                         [ 1.11486017,  2.0453859 ,  5.33408252],])
     time_span = 5.0*16
-    # time_span = 5.0*3
-
-    init_velocity = np.array([0,0,0])
-    init_acceleration = np.array([0,0,0])
-    end_velocity = np.array([0,0,0])
-    end_acceleration = np.array([0,0,0])
+    time_span = 5.0*3
 
     waypoints = waypoint.Waypoint(points, time_span)
-    config = trajectory_config.TrajectoryConfig(5, init_velocity, init_acceleration, end_velocity, end_acceleration)
+    config = trajectory_config.TrajectoryConfig(order_of_polynomial=7)
     trajectory = TrajectoryGenerator(config, waypoints)
     trajectory.get_trajectory()
     print(trajectory.cost)
     trajectory.plot_trajectory()
+    plt.tight_layout()
     plt.show()
 
 

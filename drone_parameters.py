@@ -12,6 +12,15 @@ inertia = np.diag([0.0820, 0.0845, 0.1377])  # kgm2
 inertia_inv = np.linalg.inv(inertia)
 c_tau_f = 8.004e-4  # m
 
+m_thrust_to_fm = np.array([[1.0, 1.0, 1.0, 1.0],
+                           [0.0, -d, 0.0, d],
+                           [d, 0.0, -d, 0.0],
+                           [-c_tau_f, c_tau_f, -c_tau_f, c_tau_f]])
+m_thrust_to_fm_inv = np.linalg.inv(m_thrust_to_fm)
+
+f_motor_max = 40.0  # maximum possible thrust per motor [N] Thrust per motor: 200 - 800 grams for small drones
+f_motor_min = 0.1   # minimum possible thrust per motor [N]
+
 """
 control params
 """
@@ -20,11 +29,6 @@ k_v = 5.6
 k_r = 8.81
 k_omega = 2.54
 
-m_thrust_to_fm = np.array([[1.0, 1.0, 1.0, 1.0],
-                           [0.0, -d, 0.0, d],
-                           [d, 0.0, -d, 0.0],
-                           [-c_tau_f, c_tau_f, -c_tau_f, c_tau_f]])
-m_thrust_to_fm_inv = np.linalg.inv(m_thrust_to_fm)
 
 m_payload = 1.0 # kg
 c_d = 1.5   # no unit [0.5-1.5]

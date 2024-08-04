@@ -1,8 +1,23 @@
 import numpy as np
 import quaternion
+from enum import Enum, auto
 
 
-def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+class Dim(Enum):
+    """Dimension of a 3D trajectory"""
+    X = 0
+    Y = 1
+    Z = 2
+    
+class KinematicVars(Enum):
+    """Kinematic variables"""
+    Position = 0
+    Velocity = 1
+    Acceleration = 2
+    Jerk = 3
+    Snap = 4
+
+def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     pass
 
 
@@ -20,7 +35,7 @@ def get_vee_map(m: np.ndarray) -> np.ndarray:
     return v
 
 
-def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     v_norm = np.linalg.norm(v)
     if v_norm < 0.001:
         print("Warning: get_vector_norm_derivatives: vector norm too small to get unit vector result")
@@ -30,7 +45,7 @@ def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.nda
     return (v_norm, v_norm_dot, v_norm_dot2)
 
 
-def get_unit_vector_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
+def get_unit_vector_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     (v_norm, v_norm_dot, v_norm_dot2) = get_vector_norm_derivatives(v, v_dot, v_dot2)
     b = v/v_norm
     b_dot = v_dot/v_norm - (v*v_norm_dot)/v_norm**2
@@ -38,7 +53,7 @@ def get_unit_vector_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.nda
         (2*v_dot*v_norm_dot)/v_norm**2 + (2*v*v_norm_dot**2)/v_norm**3
     return (b, b_dot, b_dot2)
 
-def get_signal_derivative(t: np.ndarray, v: np.ndarray, dt) -> (np.ndarray, np.ndarray) :
+def get_signal_derivative(t: np.ndarray, v: np.ndarray, dt) -> tuple[np.ndarray, np.ndarray] :
      
     t_dv = t[1:]
     dim = np.ndim(v)
