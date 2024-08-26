@@ -28,13 +28,16 @@ class TrajectoryReference:
         raise NotImplementedError("Method needed for trajectory")
 
 class RandomWaypoints(TrajectoryReference):
-    def __init__(self, num_of_segments):
+    def __init__(self, num_of_segments, is_2d=False):
         super().__init__()  # Initialize parent class parameters
-        file_name_prefix = "5_random_wp_map_"
+        self.is_2d = is_2d
         self.trajectory: flight_map.FlightMap = flight_map.construct_map_with_subtrajs(is_random=True, num_of_subtrajs=num_of_segments, subtraj_id=[0,1,2,3,4])
         
     def step_reference_state(self, t) -> None:
         self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4 = self.trajectory.read_data_by_time(t)   
+        if self.is_2d:
+            for state in (self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4):
+                state[0] = 0.0  # set coordinate x to 0
 
 class SpiralAndSpin(TrajectoryReference):
     def step_reference_state(self, t) -> None:
@@ -258,7 +261,7 @@ class Spin(TrajectoryReference):
 class Hover(TrajectoryReference):
     def step_reference_state(self, t) -> None:
         return None
-    def set_init_state(self, is_upside_down=True) -> None:
+    def set_init_state(self, is_upside_down=False) -> None:
         self.init_x = np.array([0.0, 0.0, 0.0])
         self.init_v = np.array([0.0, 0.0, 0.0])
         self.init_omega = np.array([0.0, 0.0, 0.0])

@@ -4,7 +4,7 @@ import drone_dynamics as dynamics
 import drone_parameters as params
 import drone_utils as utils
 import drone_trajectory as trajectory
-
+import drone_disturbance_estimator as disturbance_estimator
 
 class DroneController:
     def __init__(self) -> None:
@@ -28,8 +28,12 @@ class DroneController:
         self.f_d_dot = np.array([0.0, 0.0, 0.0])
         self.psi_r_rd = 0.0 # debug use only
         self.force_motor = np.array([0.0, 0.0, 0.0, 0.0])
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test", 0.01)
+        self.f_disturb = np.array([0.0, 0.0, 0.0])
+        self.torque_disturb = np.array([0.0, 0.0, 0.0])        
 
     def step_controller(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference):
+        self.step_disturbance_estimator(state)
         self.step_tracking_error(state, ref)
         self.step_desired_force(state, ref)
         self.step_tracking_control(state)
@@ -38,6 +42,17 @@ class DroneController:
         self.step_attitude_control(state)
         self.step_error_function_so3(state)
         self.step_motor_force()
+
+    def step_disturbance_estimator(self, state: dynamics.DroneDynamics):
+        tracking_error = np.zeros(6)
+        self.disturbance_estimator.step_disturbance(state.v, state.q, self.force_motor, self.get_disturbance(state), tracking_error)
+        self.f_disturb = np.array([self.disturbance_estimator.f_x.disturbance, self.disturbance_estimator.f_y.disturbance, self.disturbance_estimator.f_z.disturbance])
+        self.torque_disturb = np.array([self.disturbance_estimator.tq_x.disturbance, self.disturbance_estimator.tq_y.disturbance, self.disturbance_estimator.tq_z.disturbance])
+
+    def get_disturbance(self, state: dynamics.DroneDynamics):
+        f_disturb = self.f + state.pose.T@(state.v_dot*params.m - params.m*params.g*np.array([0.0, 0.0, 1.0]))
+        tq_disturbance = params.inertia@state.omega_dot + utils.get_hat_map(state.omega)@params.inertia@state.omega - self.torque
+        return np.hstack((f_disturb, tq_disturbance))
 
     def step_desired_force(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference, can_sense_jerk: bool=False, can_plan_jerk: bool=True):
         """
@@ -69,7 +84,7 @@ class DroneController:
 
     def step_tracking_control(self, state: dynamics.DroneDynamics):
         """
-        project desired force on b3
+        project desired force on b3 to generate control input force
         """
         self.f = self.f_d@(-state.pose[:, 2])*np.array([0.0, 0.0, 1.0])
         self.f_dot = self.f_d_dot@(-state.pose[:, 2])*np.array([0.0, 0.0, 1.0]) + \

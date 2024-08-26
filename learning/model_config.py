@@ -55,7 +55,7 @@ class ModelConfig:
         gamma = 10.0    # normalization of a
         spectral_norm = 2.0    # normalization
         a_shot = 32    # batch size for a 
-        phi_shot = 512    # batch size of phi net training
+        phi_shot = 256    # batch size of phi net training
         is_dynamic_environment = True    # flag to adapt to environment with matrix a, False equivalent to a = ones(size)
 
     def __init__(self, num_of_conditions, dim_of_input=11, dim_of_feature=3, dim_of_label=3):

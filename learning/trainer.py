@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 import torch
 import torch.nn as nn
@@ -48,7 +49,7 @@ class Trainer:
         phi_t_phi_inv = torch.inverse(torch.mm(phi_t, phi))
         a = torch.mm(phi_t_phi_inv, torch.mm(phi_t, ground_truth))
         if torch.norm(a, 'fro') < 0.00001:
-            raise ValueError("a is too small")
+            raise ValueError(f"a is too small, a = {a}")
         else:
             a = a / torch.norm(a, 'fro') * self.config.trainer.gamma
         return a
@@ -171,6 +172,10 @@ class Trainer:
         axs[0].plot(out[:, 0])
         axs[1].plot(out[:, 1])
         axs[2].plot(out[:, 2])
+        axs[0].set_ylabel('phi_out_x')
+        axs[1].set_ylabel('phi_out_y')
+        axs[2].set_ylabel('phi_out_z')
+        axs[2].set_xlabel('epoch')        
         
     def plot_loss(self):
         fig, axs = plt.subplots(2, 1)
@@ -188,23 +193,38 @@ class Trainer:
                 for k in range(col):
                     axs[j,k].plot(self.a_trace[i][:, j, k])
 
-    def save_model(self):
-        torch.save(self.phi_net, 'phi_net.pth')
-        torch.save(self.h_net, 'h_net.pth')
+    def save_model(self, name):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(current_dir, "model", name + ".pth")
+        torch.save({"phi": self.phi_net.state_dict(),
+                    "h": self.h_net.state_dict(),
+                    "config": self.config}, 
+                    file_path)
 
-    def load_model(self):
-        torch.load("phi_net.pth")
-        torch.load("h_net.pth")
+def load_model(name) -> tuple[model.PhiNet, model.HNet, model_config.ModelConfig]:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, "model", name + ".pth")       
+    package = torch.load(file_path)
+    phi = model.PhiNet(package["config"].phi_net)
+    phi.load_state_dict(package["phi"])
+    phi.eval()
+    h = model.HNet(package["config"].h_net)
+    h.load_state_dict(package["h"])
+    h.eval()
+    return phi, h, package["config"]
+        
 
 if __name__ == "__main__":
     is_back2back = False
     if not is_back2back:
-        data_list = ["test_air_drag_c_d_1_5.csv"]
-        # data_list = ["test_air_drag_0.csv"]
+        data_list = ["test_wall_effect_h_1_5r_dh_0.csv",
+                    "test_wall_effect_h_2r_dh_0.csv",
+                    "test_wall_effect_h_3r_dh_0.csv"]
+                    # "test_wall_effect_h_4r_dh_0.csv"]
         config = model_config.ModelConfig(len(data_list), dim_of_feature=5)
         trainer = Trainer(config)
         trainer.train_model(data_list)
-        trainer.verify_model(['test_air_drag_c_d_1_5__2.csv'])
+        trainer.verify_model(["test_wall_effect_h_1_8r_dh_0.csv"])
     else:
         data_list = ['custom_random3_baseline_10wind.csv',
                     'custom_random3_baseline_20wind.csv',
@@ -218,7 +238,15 @@ if __name__ == "__main__":
         trainer.verify_model(['custom_random3_baseline_10wind.csv'], True)
     trainer.plot_loss()
     trainer.plot_a()
-    plt.show()
+
+    trainer.save_model("test")
+    phi, h, config1 = load_model("test")
+    trainer1 = Trainer(config1)
+    trainer1.phi_net = phi
+    trainer1.h_net = h
+    trainer1.verify_model(['test_wall_effect_h_1_8r_dh_0.csv'])
+    plt.show()    
+
 
 
 

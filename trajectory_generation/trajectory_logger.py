@@ -31,15 +31,18 @@ def write_trajectory(trajectory: trajectory_generator.TrajectoryGenerator, file_
         raise ValueError("File exist: " + file_path)
     else:
         with open(file_path, 'wb') as file:
-            pickle.dump(trajectory, file)
+            pickle.dump(trajectory.__dict__, file)
         print("Trajectory data is written into:\n" + file_path)
 
 def read_trajectory(file_name: str):
     map_path = traj_gen_utils.get_dir_from_traj_gen(["data", "map", file_name])
     if os.path.exists(map_path):
         with open(map_path, 'rb') as file:
-        # Deserialize each object from the file
-            loaded_trajectory = pickle.load(file)
+            state_dict = pickle.load(file)
+            # Create a new instance without calling __init__
+            loaded_trajectory = trajectory_generator.TrajectoryGenerator.__new__(trajectory_generator.TrajectoryGenerator)
+            # Update the new instance with the saved state
+            loaded_trajectory.__dict__.update(state_dict)
             return loaded_trajectory
     else:
         raise ValueError("No such file: " + map_path)
@@ -82,7 +85,7 @@ def pick_a_trajectory(file_id: int=None):
 
 
 if __name__ == "__main__":
-    # make_random_trajectories(200)
-    loaded_trajectory = read_trajectory("5_random_wp_map_180.pkl")
+    make_random_trajectories(196)
+    loaded_trajectory = read_trajectory("5_random_wp_map_199.pkl")
     loaded_trajectory.plot_trajectory()    
     plt.show()

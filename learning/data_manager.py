@@ -41,7 +41,7 @@ class LearningDataset(Dataset):
         self.input[:, 3:7] *= 1
         self.input[:, 0:3] *= 1
 
-        self.output[:,0:3] *= 1
+        self.output[:,0:3] *= 10
 
     def plot_data(self):
         fig, axs = plt.subplots(4,1)
@@ -67,9 +67,7 @@ class LearningDataset(Dataset):
 
 def load_sim_data(file_name: str) -> np.ndarray:
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(os.path.dirname(current_dir), "data")
-    file_path = os.path.join(file_path, "training")    
-    file_path = os.path.join(file_path, file_name)    
+    file_path = os.path.join(os.path.dirname(current_dir), "data", "training", file_name)
     if os.path.exists(file_path):
         # Load the data from the CSV file, skipping the first row (header)
         sim_data = np.genfromtxt(file_path, delimiter=',', skip_header=1)
@@ -126,9 +124,7 @@ def prepare_back2back_datasets(menu: list) -> list[LearningDataset]:
 
 def load_back2back_data(file_name: str) -> np.ndarray:
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(os.path.dirname(current_dir), "data")
-    file_path = os.path.join(file_path, "training_back2back")    
-    file_path = os.path.join(file_path, file_name)    
+    file_path = os.path.join(os.path.dirname(current_dir), "data", "training_back2back", file_name)
     if os.path.exists(file_path):
         # Load the csv using a pandas.DataFrame
         df = pd.read_csv(file_path)

@@ -3,6 +3,8 @@ import quaternion
 import drone_utils as utils
 
 class QuaternionOfRotation:
+    """this class handles change of rotation matrix, given a rotation operation represented by a quaternion 
+    """
     def __init__(self, 
                  q: quaternion.quaternion = np.quaternion(1.0, 0.0, 0.0, 0.0)) -> None:
         self.q = q
@@ -17,6 +19,15 @@ class QuaternionOfRotation:
         self.q_dot = 0.5*omega_q*self.q
 
     def step_rotation_matrix(self, r_0: np.ndarray) -> np.ndarray:
+        """given the quaternion, rotate the rotation matrix
+        treat rotation matrix basis individually and apply e_t = q*e_0*q^-1 
+
+        Args:
+            r_0 (np.ndarray): rotation matrix before rotation
+
+        Returns:
+            np.ndarray: rotation matrix after rotattion
+        """
         r_t = np.identity(3)
         q_normalized = normalize_quaternion(self.q)
         q_normalized_conj = q_normalized.conjugate()

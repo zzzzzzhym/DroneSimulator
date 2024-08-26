@@ -115,9 +115,7 @@ class FlightMap:
 
 def construct_map_file_path(file_name: str) -> str:
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    map_folder_dir = os.path.join(os.path.dirname(current_dir), "data")
-    map_folder_dir = os.path.join(map_folder_dir, "map")    
-    file_path = os.path.join(map_folder_dir, file_name)
+    file_path = os.path.join(os.path.dirname(current_dir), "data", "map", file_name)
     return file_path
 
 def write_flight_map(map: FlightMap, file_name: str) -> None:
@@ -153,10 +151,10 @@ def construct_map_with_subtrajs(is_random=True, num_of_subtrajs: int=0, subtraj_
     return FlightMap(subtrajs)
 
 if __name__ == "__main__":
-    constructed_map = construct_map_with_subtrajs(is_random=False, subtraj_id=[21,22,23])
-    write_flight_map(constructed_map, "specified_wp_map_3sub.pkl")
-    # constructed_map = construct_map_with_subtrajs(num_of_subtrajs=3)
-    # write_flight_map(constructed_map, "random_wp_map_3sub.pkl")
+    # constructed_map = construct_map_with_subtrajs(is_random=False, subtraj_id=[21,22,23])
+    # write_flight_map(constructed_map, "specified_wp_map_3sub.pkl")
+    constructed_map = construct_map_with_subtrajs(num_of_subtrajs=3)
+    write_flight_map(constructed_map, "random_wp_map_3sub.pkl")
     map_reload = read_flight_map("specified_wp_map_3sub.pkl")
     map_reload.plot_stitched_traj()
     plt.show()
