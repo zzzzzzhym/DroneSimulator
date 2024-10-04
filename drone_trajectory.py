@@ -31,7 +31,7 @@ class RandomWaypoints(TrajectoryReference):
     def __init__(self, num_of_segments, is_2d=False):
         super().__init__()  # Initialize parent class parameters
         self.is_2d = is_2d
-        self.trajectory: flight_map.FlightMap = flight_map.construct_map_with_subtrajs(is_random=True, num_of_subtrajs=num_of_segments, subtraj_id=[0,1,2,3,4])
+        self.trajectory: flight_map.FlightMap = flight_map.construct_map_with_subtrajs(is_random=False, num_of_subtrajs=num_of_segments, subtraj_id=[0,1,2,3,4])
         
     def step_reference_state(self, t) -> None:
         self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4 = self.trajectory.read_data_by_time(t)   

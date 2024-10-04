@@ -239,8 +239,8 @@ if __name__ == "__main__":
     trainer.plot_loss()
     trainer.plot_a()
 
-    trainer.save_model("test")
-    phi, h, config1 = load_model("test")
+    trainer.save_model("wall_effect")
+    phi, h, config1 = load_model("wall_effect")
     trainer1 = Trainer(config1)
     trainer1.phi_net = phi
     trainer1.h_net = h

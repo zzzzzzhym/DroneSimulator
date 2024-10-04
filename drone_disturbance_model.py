@@ -1,6 +1,7 @@
 import numpy as np
 import drone_parameters as params
 import drone_propeller
+import drone_utils as utils
 import warnings
 
 class DisturbanceForce:
@@ -111,7 +112,7 @@ class WallEffect(DisturbanceForce):
     """
     def __init__(self, ) -> None:
         """Wall location"""
-        self.wall_origin = np.array([-params.rotor_radius*2.5, 0, 0])
+        self.wall_origin = np.array([-params.rotor_radius*2, 0, 0])
         self.wall_norm = np.array([1, 0, 0])  # norm vector of the wall; 
         """Wall effect params"""
         self.max_force = 0.02
@@ -158,7 +159,7 @@ class WallEffect(DisturbanceForce):
         """
         d = self.get_distance_to_wall(state[0:3])
         f = self.get_c_f(d)*0.5*params.rho_air*rotor_spd**2*self.propeller.diameter**4
-        self.f_explicit = f*self.wall_norm
+        self.f_explicit = -f*self.wall_norm
     
     def update_explicit_torque(self, t: float=0.0, state: np.ndarray=np.zeros(13), rotor_spd: float=0.0) -> None:
         """M_wall = 0.5*C_F*rho_air*rotor_spd^2*d*4
