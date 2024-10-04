@@ -720,6 +720,6 @@ def update_frame(ax: plt.Axes, text, pos: np.ndarray, pose_ref: np.ndarray, pose
 
 if __name__ == "__main__":
     sim_test = DroneSimulator()
-    sim_test.run_simulation(25)
+    sim_test.run_simulation(10)
     sim_test.make_plots(True)
     plt.show()

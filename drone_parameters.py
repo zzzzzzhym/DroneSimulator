@@ -13,6 +13,7 @@ inertia = np.diag([0.0820, 0.0845, 0.1377])  # kgm2
 inertia_inv = np.linalg.inv(inertia)
 c_tau_f = 8.004e-4  # m
 
+"""convert thrust to force and torque"""
 m_thrust_to_fm = np.array([[1.0, 1.0, 1.0, 1.0],
                            [0.0, -d, 0.0, d],
                            [d, 0.0, -d, 0.0],

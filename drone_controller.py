@@ -159,7 +159,7 @@ class DroneController:
                         1 - self.pose_desired[:,1]@state.pose[:,1] +
                         1 - self.pose_desired[:,2]@state.pose[:,2])
     
-    def step_motor_force(self, can_saturate=False):
+    def step_motor_force(self, can_saturate=True):
         f_motor_raw = params.m_thrust_to_fm_inv@np.hstack((self.f[2], self.torque))
         if can_saturate:
             self.force_motor = np.clip(f_motor_raw, a_max=params.f_motor_max, a_min=params.f_motor_min)
