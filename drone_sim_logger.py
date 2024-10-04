@@ -22,6 +22,6 @@ def construct_csv_array(sim_data: drone_simulation.DroneSimulator) -> tuple[str,
 if __name__ == "__main__":
     sim_test = drone_simulation.DroneSimulator()
     sim_test.run_simulation(120)
-    log_sim_result(sim_test, "test_wall_effect_h_4r_dh_0.csv")  
+    log_sim_result(sim_test, "test_wall_effect_h_1_5r_dh_0.csv")  
     sim_test.make_plots()  
     plt.show()

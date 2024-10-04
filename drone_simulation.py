@@ -29,7 +29,7 @@ class DroneSimulator:
         print("number of dynamics model steps per controller step: " +
               str(self.dc_ratio))
         self.sim_trajectory = trajectory.RandomWaypoints(300, True)
-        # self.sim_trajectory = trajectory.SpiralAndSpin()
+        # self.sim_trajectory = trajectory.CircleYZ()
         # self.sim_trajectory = trajectory.Hover()
         self.sim_trajectory.set_init_state()
         self.sim_dynamics = dynamics.DroneDynamics(
@@ -720,6 +720,6 @@ def update_frame(ax: plt.Axes, text, pos: np.ndarray, pose_ref: np.ndarray, pose
 
 if __name__ == "__main__":
     sim_test = DroneSimulator()
-    sim_test.run_simulation(10)
+    sim_test.run_simulation(30)
     sim_test.make_plots(True)
     plt.show()
