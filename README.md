@@ -2,7 +2,7 @@
 This repo replicates Neural-Fly[1] project in a simulation environment. 
 
 ## Introduction
-[system diagram](images/system_diagram.drawio)
+[system diagram](images/system_diagram.drawio.svg)
 
 The repo is consisted with the following modules:  
 - a drone dynamic simulation environment
