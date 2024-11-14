@@ -4,7 +4,7 @@ import drone_utils as utils
 
 
 class Rotation:
-    def __init__(self, rotation_matrix: np.ndarray = np.identity(3)):
+    def __init__(self, rotation_matrix: np.ndarray = np.eye(3)):
         self.rotation_matrix = rotation_matrix
 
     def step_rotation_matrix(self, omega: np.ndarray, dt: float):

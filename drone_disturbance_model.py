@@ -1,8 +1,13 @@
 import numpy as np
-import drone_parameters as params
-import drone_propeller
-import drone_utils as utils
 import warnings
+
+import drone_parameters as params
+import drone_dynamics_state
+import drone_propeller
+import drone_rotor
+import drone_utils as utils
+import inflow_model.propeller_lookup_table as propeller_lookup_table
+import flow_pass_object.flow_pass_flat_plate as flow_pass_flat_plate
 
 class DisturbanceForce:
     """Generate a force in inertial frame
@@ -35,61 +40,52 @@ class DisturbanceForce:
         self.t_implicit = np.zeros(3)
         self.t_explicit = np.zeros(3)
 
-    def update_explicit_force(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> None:
+    def update_explicit_wrench(self, t: float=0.0, state: drone_dynamics_state.State=None) -> None:
         """API of explicit disturbance force
 
         Args:
             see class level API
         Returns:
-            np.ndarray: (3,) array to represent (f_x, f_y, f_z)
+            tuple of np.ndarray: (3,) array to represent (f_x, f_y, f_z) and (3,) array to represent (t_x, t_y, t_z)
         """
         raise NotImplementedError("This function need to be implemented by subclasses")
     
-    def update_explicit_torque(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> None:
-        """API of explicit disturbance force
-
-        Args:
-            see class level API
-        Returns:
-            np.ndarray: (3,) array to represent (t_x, t_y, t_z)
-        """
-        raise NotImplementedError("This function need to be implemented by subclasses")
-    
-    def get_implicit_force_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
+    def get_implicit_wrench_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
         """API of implicit disturbance derivatives
 
         Args:
             see class level API
         Returns:
-            np.ndarray: (3,) array to represent (f_x, f_y, f_z)
+            tuple of np.ndarray: (3,) array to represent (f_x, f_y, f_z) and (3,) array to represent (t_x, t_y, t_z)
         """
         raise NotImplementedError("This function need to be implemented by subclasses")
-    
-    def get_implicit_torque_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
-        """API of implicit disturbance derivatives
-
-        Args:
-            see class level API
-        Returns:
-            np.ndarray: (3,) array to represent (t_x, t_y, t_z)
-        """
-        raise NotImplementedError("This function need to be implemented by subclasses")
-
 
 def const_force(weight):
     # typical payload of a drone ranges from 0.2kg to 1kg
     # of course, to properly simulate payload, we should change mass instead
-    return np.array([0, 0, params.g*weight])
+    return np.array([0, 0, params.Environment.g*weight])
+
+class Free(DisturbanceForce):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def update_explicit_wrench(self, t: float=0.0, state: drone_dynamics_state.State=None, dummy=0) -> None:
+        self.f_explicit = np.zeros(3)
+        self.t_explicit = np.zeros(3)
+
+    def get_implicit_wrench_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
+        return np.zeros(3), np.zeros(3)
 
 class AirDrag(DisturbanceForce):
     def __init__(self) -> None:
         super().__init__()
 
-    def update_explicit_force(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> None:
-        self.f_explicit = self.get_air_drag(state[3:6])
+    def update_explicit_wrench(self, t: float=0.0, state: drone_dynamics_state.State=None) -> None:
+        self.f_explicit = self.get_air_drag(state.v)
+        self.t_explicit = np.zeros(3)
 
-    def get_implicit_force_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
-        return np.zeros(3)
+    def get_implicit_wrench_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
+        return np.zeros(3), np.zeros(3)
     
     @staticmethod
     def get_air_drag(v: np.ndarray) -> np.ndarray:
@@ -110,7 +106,7 @@ class WallEffect(DisturbanceForce):
     """Ref:
     Ground, Ceiling and Wall Effect Evaluation of Small Quadcopters in Pressure-controlled Environments
     """
-    def __init__(self, ) -> None:
+    def __init__(self) -> None:
         """Wall location"""
         self.wall_origin = np.array([-params.rotor_radius*2, 0, 0])
         self.wall_norm = np.array([1, 0, 0])  # norm vector of the wall; 
@@ -153,32 +149,62 @@ class WallEffect(DisturbanceForce):
         d = (location - self.wall_origin)@self.wall_norm
         return d
 
-    def update_explicit_force(self, t: float=0.0, state: np.ndarray=np.zeros(13), rotor_spd: float=0.0) -> None:
+    def update_explicit_wrench(self, t: float=0.0, state: drone_dynamics_state.State=None, rotor_spd: float=0.0) -> None:
         """F_wall = 0.5*C_F*rho_air*rotor_spd^2*d*4
         rotor_spd: rps
         """
-        d = self.get_distance_to_wall(state[0:3])
-        f = self.get_c_f(d)*0.5*params.rho_air*rotor_spd**2*self.propeller.diameter**4
+        d = self.get_distance_to_wall(state.position)
+        f = self.get_c_f(d)*0.5*params.Environment.rho_air*rotor_spd**2*self.propeller.diameter**4
         self.f_explicit = -f*self.wall_norm
-    
-    def update_explicit_torque(self, t: float=0.0, state: np.ndarray=np.zeros(13), rotor_spd: float=0.0) -> None:
-        """M_wall = 0.5*C_F*rho_air*rotor_spd^2*d*4
-        rotor_spd: rps
-        """
-        d = self.get_distance_to_wall(state[0:3])
-        t = self.get_c_q(d)*0.5*params.rho_air*rotor_spd**2*self.propeller.diameter**5
+        t = self.get_c_q(d)*0.5*params.Environment.rho_air*rotor_spd**2*self.propeller.diameter**5
         self.t_explicit = t*np.array([0, 1, 0])
     
-    def get_implicit_force_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
-        return np.zeros(3)
+    def get_implicit_wrench_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
+        return np.zeros(3), np.zeros(3)
     
-    def get_implicit_torque_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
-        return np.zeros(3)
-    
+
+class WindEffectNearWall(DisturbanceForce):
+    """This model integrates flow pass a vertical wall and the inflow model of propeller. It simulates wind velocity field around a wall and its impact on drone rotors.
+    """
+    def __init__(self, wall_origin=np.array([-0.5, 0, 0]), wall_norm=np.array([1, 0, 0]), wall_length=4.0) -> None:
+        super().__init__()
+        self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6")
+        self.wind_field_model = flow_pass_flat_plate.FlowPassFlatPlate.Interface(wall_norm, wall_origin, wall_length)
+        self.u_free = np.array([-5.0, 0.0, 0.0])    # in FLU inertial frame
+
+    def update_explicit_wrench(self, t: float, state: drone_dynamics_state.State, rotor_set: drone_rotor.RotorSet, force_control, torque_control) -> None:
+        """WARNING: To be tested
+
+        Args:
+            rotors (_type_): _description_
+        """
+        forces = []
+        torques = []
+        for rotor in rotor_set.rotors:
+            wind_velocity = self.wind_field_model.get_solution(self.u_free, rotor.position_inertial_frame)
+            force = self.propeller_force_table.get_rotor_forces(wind_velocity, rotor.velocity_inertial_frame, rotor.pose, rotor.rotation_speed, rotor.is_ccw_blade)
+            forces.append(force)
+            torques.append(np.cross(rotor.relative_position_inertial_frame, force))
+        self.f_explicit = sum(forces)
+        self.t_explicit = sum(torques)
+        self.f_explicit = utils.FrdFluConverter.flip(self.f_explicit)
+        self.t_explicit = utils.FrdFluConverter.flip(self.t_explicit)
+        self.f_explicit = state.pose.T@self.f_explicit  # convert to body frame
+        self.t_explicit = state.pose.T@self.t_explicit  # convert to body frame
+        self.f_explicit = self.f_explicit - (-force_control)   # only the difference is considered as disturbance. postive force_control in negative z axis
+        self.t_explicit = self.t_explicit - torque_control  # only the difference is considered as disturbance
+
+        # debug
+        # if np.linalg.norm(self.f_explicit) > 10 and t > 0.5:
+        #     print(f"Wind effect: {self.f_explicit}")
+        self.t_explicit[2] = 0.0    # the inflow model did not model torque in z axis
+        
+
+    def get_implicit_wrench_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
+        return np.zeros(3), np.zeros(3)
 
 if __name__ == "__main__":
     wall = WallEffect()
-    wall.update_explicit_force(0, rotor_spd=2000.0/60)
-    wall.update_explicit_torque(0, rotor_spd=2000.0/60)
+    wall.update_explicit_wrench(0.0, drone_dynamics_state.State(), rotor_spd=2000.0/60)
     print(wall.f_explicit)
     print(wall.t_explicit)

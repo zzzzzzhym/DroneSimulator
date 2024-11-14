@@ -6,7 +6,10 @@ from matplotlib.animation import FuncAnimation
 
 import drone_trajectory as trajectory
 import drone_dynamics as dynamics
+import drone_dynamics_state as state
 import drone_controller as controller
+import drone_propeller as propeller
+import drone_disturbance_model as disturbance
 import drone_utils as utils
 import drone_parameters as params
 import drone_plot_utils
@@ -33,12 +36,15 @@ class DroneSimulator:
         # self.sim_trajectory = trajectory.Hover()
         self.sim_trajectory.set_init_state()
         self.sim_dynamics = dynamics.DroneDynamics(
-            self.sim_trajectory.init_x,
-            self.sim_trajectory.init_v,
-            self.sim_trajectory.init_pose,
-            self.sim_trajectory.init_omega,
+            params.PennStateARILab550(),
+            propeller.apc_8x6,
+            disturbance.WindEffectNearWall(),
+            state.State(self.sim_trajectory.init_x,
+                        self.sim_trajectory.init_v,
+                        self.sim_trajectory.init_pose,
+                        self.sim_trajectory.init_omega),
             self.dt_dynamics)
-        self.sim_controller = controller.DroneController()
+        self.sim_controller = controller.DroneController(params.PennStateARILab550())
         '''
         data to plot
         '''
@@ -125,9 +131,9 @@ class DroneSimulator:
                 pass
             self.step_simulation(t)
 
-            buffer["position"].append(self.sim_dynamics.position)
-            buffer["q"].append(self.sim_dynamics.q)
-            buffer["v"].append(self.sim_dynamics.v)
+            buffer["position"].append(self.sim_dynamics.state.position)
+            buffer["q"].append(self.sim_dynamics.state.q)
+            buffer["v"].append(self.sim_dynamics.state.v)
             buffer["dv"].append(self.sim_dynamics.v_dot)
             buffer["e_x"].append(self.sim_controller.e_x)
             buffer["e_v"].append(self.sim_controller.e_v)
@@ -136,8 +142,8 @@ class DroneSimulator:
             buffer["e_r"].append(self.sim_controller.e_r)
             buffer["e_omega"].append(self.sim_controller.e_omega)
             buffer["psi_r_rd"].append(self.sim_controller.psi_r_rd)
-            buffer["f_ctrl_input"].append(-self.sim_dynamics.pose@self.sim_controller.f)
-            buffer["f_ctrl_input_dot"].append(-self.sim_dynamics.pose@self.sim_controller.f_dot)
+            buffer["f_ctrl_input"].append(-self.sim_dynamics.state.pose@self.sim_controller.f)
+            buffer["f_ctrl_input_dot"].append(-self.sim_dynamics.state.pose@self.sim_controller.f_dot)
             buffer["f_d"].append(self.sim_controller.f_d)
             buffer["f_d_dot"].append(self.sim_controller.f_d_dot)
             buffer["f_d_dot2"].append(self.sim_controller.f_d_dot2)
@@ -153,13 +159,13 @@ class DroneSimulator:
             buffer["torque_disturb"].append(self.sim_dynamics.torque_disturb)
             buffer["torque_disturb_est"].append(self.sim_controller.torque_disturb)
             buffer["torque_disturb_est_base"].append(self.sim_controller.torque_disturb_base)
-            buffer["omega"].append(self.sim_dynamics.pose@self.sim_dynamics.omega)
-            buffer["omega_dot"].append(self.sim_dynamics.pose@self.sim_dynamics.omega_dot)
+            buffer["omega"].append(self.sim_dynamics.state.pose@self.sim_dynamics.state.omega)
+            buffer["omega_dot"].append(self.sim_dynamics.state.pose@self.sim_dynamics.omega_dot)
             buffer["omega_desired"].append(self.sim_controller.omega_desired)
             # suspect python pointer related bug occurs if remove *1
-            buffer["pose"].append(self.sim_dynamics.pose*1)
+            buffer["pose"].append(self.sim_dynamics.state.pose*1)
             buffer["pose_dot"].append(utils.get_hat_map(
-                self.sim_dynamics.pose@self.sim_dynamics.omega)@self.sim_dynamics.pose)
+                self.sim_dynamics.state.pose@self.sim_dynamics.state.omega)@self.sim_dynamics.state.pose)
             buffer["pose_desired"].append(self.sim_controller.pose_desired)
             buffer["pose_desired_dot"].append(self.sim_controller.pose_desired_dot)
             buffer["pose_desired_dot2"].append(self.sim_controller.pose_desired_dot2)
@@ -213,7 +219,7 @@ class DroneSimulator:
         axs[0, 2].plot(t_diff, v_diff[:, 0], marker='.')
         axs[1, 2].plot(t_diff, v_diff[:, 1], marker='.')
         axs[2, 2].plot(t_diff, v_diff[:, 2], marker='.')
-        a_trace = self.logger_np["f_ctrl_input"]/params.m
+        a_trace = self.logger_np["f_ctrl_input"]/self.sim_dynamics.drone.m
         axs[0, 2].plot(self.t_span, a_trace[:, 0])
         axs[1, 2].plot(self.t_span, a_trace[:, 1])
         axs[2, 2].plot(self.t_span, a_trace[:, 2])
@@ -225,7 +231,7 @@ class DroneSimulator:
         axs[0, 3].plot(t_diff, a_diff[:, 0], marker='.')
         axs[1, 3].plot(t_diff, a_diff[:, 1], marker='.')
         axs[2, 3].plot(t_diff, a_diff[:, 2], marker='.')
-        j_trace = self.logger_np["f_ctrl_input_dot"]/params.m
+        j_trace = self.logger_np["f_ctrl_input_dot"]/self.sim_dynamics.drone.m
         axs[0, 3].plot(self.t_span, j_trace[:, 0], marker='x')
         axs[1, 3].plot(self.t_span, j_trace[:, 1], marker='x')
         axs[2, 3].plot(self.t_span, j_trace[:, 2], marker='x')
@@ -413,7 +419,7 @@ class DroneSimulator:
         axs[0, 3].plot(t_diff, e_a_diff[:, 0], marker='.')
         axs[1, 3].plot(t_diff, e_a_diff[:, 1], marker='.')
         axs[2, 3].plot(t_diff, e_a_diff[:, 2], marker='.')
-        j_trace = self.logger_np["f_ctrl_input_dot"]/params.m
+        j_trace = self.logger_np["f_ctrl_input_dot"]/self.sim_dynamics.drone.m
         axs[0, 3].plot(self.t_span, j_trace[:, 0] - self.logger_np["x_d_dot3"][:, 0])
         axs[1, 3].plot(self.t_span, j_trace[:, 1] - self.logger_np["x_d_dot3"][:, 1])
         axs[2, 3].plot(self.t_span, j_trace[:, 2] - self.logger_np["x_d_dot3"][:, 2])
@@ -642,7 +648,7 @@ class DroneSimulator:
                     self.logger_np["position"][:, 1],
                     self.logger_np["position"][:, 2], 'green')
         b1b2, b3 = drone_plot_utils.generate_drone_profile(
-            self.sim_dynamics.position, self.sim_dynamics.pose)
+            self.sim_dynamics.state.position, self.sim_dynamics.state.pose)
         axs9.plot3D(b1b2[:, 0],
                     b1b2[:, 1],
                     b1b2[:, 2], 'red')
@@ -650,7 +656,7 @@ class DroneSimulator:
                     b3[:, 1],
                     b3[:, 2], 'red')
         b1b2, b3 = drone_plot_utils.generate_drone_profile(
-            self.sim_dynamics.position, self.sim_controller.pose_desired)
+            self.sim_dynamics.state.position, self.sim_controller.pose_desired)
         axs9.plot3D(b1b2[:, 0],
                     b1b2[:, 1],
                     b1b2[:, 2], 'orange')
@@ -662,8 +668,8 @@ class DroneSimulator:
         axs9.plot3D(b1[:, 0],
                     b1[:, 1],
                     b1[:, 2], 'purple')
-        b1 = np.vstack((self.sim_dynamics.position,
-                        self.sim_dynamics.position + 0.5*self.sim_trajectory.b_1d))
+        b1 = np.vstack((self.sim_dynamics.state.position,
+                        self.sim_dynamics.state.position + 0.5*self.sim_trajectory.b_1d))
         axs9.plot3D(b1[:, 0],
                     b1[:, 1],
                     b1[:, 2], 'purple')

@@ -16,16 +16,72 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
 import drone_propeller
+import drone_utils as utils
+import drone_dynamics_state as state
 
 class Rotor:
-    def __init__(self, propeller: drone_propeller.Propeller) -> None:
-        pass
+    """This class manage the state of individual rotor and its relationship to the drone. It may include rotor center velocity, rotor position and rotor pose. 
+    """
+    def __init__(self, propeller: drone_propeller.Propeller, relative_position_body_frame: np.ndarray, is_ccw_blade: bool) -> None:
+        self.is_ccw_blade = is_ccw_blade
+        self.rotation_speed = 0             # rotation speed [rad/s]
+        self.velocity_inertial_frame = np.zeros(3)  # rotor center velocity in inertial frame
+        self.position_inertial_frame = np.zeros(3)  # rotor center position in inertial frame
+        self.pose = np.eye(3)               # rotor pose in inertial frame
+        self.propeller = propeller
+        self.relative_position_body_frame = relative_position_body_frame             # rotor position relative to drone center in body frame
+        self.relative_position_inertial_frame = np.zeros(3)         # rotor position relative to drone center in inertial frame
 
-    def inject_uncertainties(self):
-        pass
+    def step_rotor_states(self, drone_pose, drone_position_inertial_frame, drone_velocity_inertial_frame, omega_inertial_frame, thrust):
+        self.step_pose(drone_pose)
+        self.step_relative_position_inertial_frame()
+        self.step_center_position_in_inertial_frame(drone_position_inertial_frame)
+        self.step_center_velocity_in_inertial_frame(drone_velocity_inertial_frame, omega_inertial_frame)
+        self.step_rotation_speed(thrust)
 
-    def make_delay(self):
-        pass
+    def step_pose(self, drone_pose):
+        """Rotor and drone has a relative pose."""
+        # get rotor relative pose to drone pose in FRD frame
+        x = drone_pose[:, 0]    # 1D array
+        y = -drone_pose[:, 1]   # 1D array
+        z = -drone_pose[:, 2]   # 1D array
+        # Then flip to FLU frame
+        self.pose = np.vstack((x, y, z)).T
 
-    def make_noise(self):
-        pass
+    def step_relative_position_inertial_frame(self):
+        self.relative_position_inertial_frame = self.pose@self.relative_position_body_frame
+
+    def step_center_position_in_inertial_frame(self, drone_position_inertial_frame):
+        self.position_inertial_frame = drone_position_inertial_frame + self.relative_position_inertial_frame
+    
+    def step_center_velocity_in_inertial_frame(self, drone_velocity_inertial_frame, omega_inertial_frame):
+        self.velocity_inertial_frame = drone_velocity_inertial_frame + np.cross(omega_inertial_frame, self.relative_position_inertial_frame)
+
+    def step_rotation_speed(self, thrust):
+        self.rotation_speed = utils.convert_rpm_to_radps(self.propeller.get_rotation_speed(thrust))
+    
+class RotorSet:
+    """This class manage the collection of all rotors on the drone."""    
+    def __init__(self, drone: params.Drone, propeller: drone_propeller.Propeller) -> None:
+        self.params = drone.get_rotor_data()
+        self.rotors: list[Rotor] = [
+            Rotor(propeller, position, blade) 
+            for position, blade in zip(self.params.rotor_position, self.params.is_ccw_blade)
+        ]
+
+    def step_rotor_states(self, drone_state: state, thrusts):
+        """_summary_
+
+        Args:
+            drone_state (state): drone state in FRD frame
+            thrusts (_type_): vector of thrusts from each rotor. Note that a thrust is a scalar value
+        """
+        for rotor, thrust in zip(self.rotors, thrusts): 
+            rotor.step_rotor_states(utils.FrdFluConverter.flip(drone_state.get_pose_in_inertial_frame()),  
+                                    utils.FrdFluConverter.flip(drone_state.get_position_in_inertial_frame()),
+                                    utils.FrdFluConverter.flip(drone_state.get_velocity_in_inertial_frame()),
+                                    utils.FrdFluConverter.flip(drone_state.get_omega_in_inertial_frame()),
+                                    thrust)
+    
+
+

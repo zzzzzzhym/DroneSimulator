@@ -53,7 +53,7 @@ class DroneDynamics:
 if __name__ == "__main__":
     x = np.array([0.0, 0.0, 0.0])
     v1 = np.array([1.0, 2.0, 3.0])
-    pose1 = np.identity(3)
+    pose1 = np.eye(3)
     omega1 = np.array([np.pi/6, 0.0, 0.0])
     dt1 = 1.0
     kinematics = DroneDynamics(x, v1, pose1, omega1, dt1)

@@ -10,6 +10,13 @@ The repo is consisted with the following modules:
 - a trajectory generator based on [3]
 - a replication of [4] 
 
+## How-to
+To run the simulation, use the following command to ensure the modules are properly called:
+
+```bash
+python -m <module_name>
+```
+
 ## Demo
 The simulation environment can produce the drone flight trace and its reference path.  
 ![drone fly](images/drone_tracking_a_trajectory.png)  

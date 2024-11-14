@@ -121,6 +121,26 @@ def convert_quaternion_to_rotation_matrix(q: np.ndarray) -> np.ndarray:
     rotation = R.from_quat(q_compatible)
     return rotation.as_matrix() 
 
+class FrdFluConverter:
+    m_frd_flu = np.array([[1, 0, 0],
+                          [0, -1, 0],
+                          [0, 0, -1]])  # m_frd_flu.T = m_frd_flu so both direction of conversion use the same matrix
+    
+    @staticmethod
+    def flip(x: np.ndarray):
+        """x can be a vector or rotation matrix
+        if x is in FRD frame, convert it to FLU frame
+        if x is in FLU frame, convert it to FRD frame
+        """
+        return FrdFluConverter.m_frd_flu@x
+    
+def convert_rpm_to_radps(rpm):
+    return rpm/60*2*np.pi
+
+def convert_radps_to_rpm(radps):
+    return radps*60/(2*np.pi)
+
+
 if __name__ == "__main__":
     v_test = np.array([1, 2, 3])
     m_test = get_hat_map(v_test)
