@@ -1,76 +1,53 @@
 import numpy as np
 from scipy.integrate import solve_ivp
-import quaternion
 import quaternion_updater
 import drone_parameters as params
 import drone_utils as utils
-import drone_disturbance_model as disturbance
+import drone_disturbance_model
 import drone_propeller
-import pandas as pd
-
+import drone_rotor
+from drone_dynamics_state import State
 
 class DroneDynamics:
-    def __init__(self, position: np.ndarray, v: np.ndarray,
-                 pose: np.ndarray, omega: np.ndarray, dt: float = 0.01) -> None:
+    def __init__(self, drone: params.Drone, propeller: drone_propeller.Propeller, disturbance: drone_disturbance_model.DisturbanceForce, init_state: State, dt: float = 0.01) -> None:
         """
         pose is a 3x3 rotation matrix from body to inertial frame
         omega is in body fix frame
-        inertial frame has front-right-down as x-y-z direction
+        inertial frame has front-right-down as x-y-z direction (FRD)
         """
+        self.drone = drone
         self.dt = dt
-        '''
-        states
-        '''
-        self.position = position    # in inertial frame
-        self.pose = pose    # rotation matrix in inertial frame
-        self.v = v  # in inertial frame
-        self.omega = omega  # omega in body fix frame
-        self.q = utils.convert_rotation_matrix_to_quaternion(self.pose)
-        # self.q_rotation = quaternion_updater.QuaternionOfRotation(utils.convert_rotation_matrix_to_quaternion(self.pose))
-        '''
-        derivatives
-        '''
+        self.state = init_state
+        # derivatives
         self.v_dot = np.array([0.0, 0.0, 0.0])
         self.omega_dot = np.array([0.0, 0.0, 0.0])  # in body fix frame
         self.q_dot = np.quaternion(1.0, 0.0, 0.0, 0.0)
-        '''
-        input
-        '''
+        # input
         self.f = np.array([0.0, 0.0, 0.0])  # propulsion force (positive in body frame -z direction); directly assigned from controller
         self.torque = np.array([0.0, 0.0, 0.0]) # in body fix frame
-        '''
-        disturbance
-        '''
-        self.disturbance = disturbance.WallEffect()
+        # disturbance
+        self.disturbance = disturbance
         self.f_disturb = self.disturbance.f_implicit + self.disturbance.f_explicit
         self.torque_disturb = self.disturbance.t_implicit + self.disturbance.t_explicit
-
-        '''
-        rotor positions
-        rotors are labeled as _px, _nx, _py, _ny to denote the location of rotors on positive/negative x/y axis 
-        in the dataframe px nx py ny are rows, position velocity are columns
-        '''
-        self.rotor = pd.DataFrame({
-            "position": [np.array([params.d, 0, 0]), np.array([-params.d, 0, 0]), np.array([0, params.d, 0]), np.array([0, -params.d, 0])],
-            "velocity": [np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0])]
-        }, index=["px", "nx", "py", "ny"])
+        # rotor states
+        self.rotors = drone_rotor.RotorSet(self.drone, propeller)
         self.rotor_spd_avg = 0.0    # rpm
 
 
     def pack_state_vector(self) -> np.ndarray:
-        y = np.array([self.position[0], # 0
-                      self.position[1], # 1
-                      self.position[2], # 2
-                      self.v[0],        # 3
-                      self.v[1],        # 4
-                      self.v[2],        # 5
-                      self.q[0],        # 6
-                      self.q[1],        # 7
-                      self.q[2],        # 8
-                      self.q[3],        # 9
-                      self.omega[0],    # 10
-                      self.omega[1],    # 11
-                      self.omega[2],    # 12
+        y = np.array([self.state.position[0], # 0
+                      self.state.position[1], # 1
+                      self.state.position[2], # 2
+                      self.state.v[0],        # 3
+                      self.state.v[1],        # 4
+                      self.state.v[2],        # 5
+                      self.state.q[0],        # 6
+                      self.state.q[1],        # 7
+                      self.state.q[2],        # 8
+                      self.state.q[3],        # 9
+                      self.state.omega[0],    # 10
+                      self.state.omega[1],    # 11
+                      self.state.omega[2],    # 12
                       self.disturbance.f_implicit[0],    # 13
                       self.disturbance.f_implicit[1],    # 14
                       self.disturbance.f_implicit[2],    # 15
@@ -80,12 +57,22 @@ class DroneDynamics:
                       
         return y
 
+    def step_dynamics(self, t: float) -> None:
+        """Entry point of drone dynamics"""
+        y_0 = self.pack_state_vector()
+        self.step_disturbance_force(t)
+        y_t = self.step_state_vector(y_0, t)
+        self.unpack_state_vector(y_t)
+        y_t_dot = self.get_derivatives_from_eom(t, y_t)   # argument t does affect output
+        self.unpack_state_derivatives(y_t_dot)
+        self.rotors.step_rotor_states(self.state, self.get_thrust_from_input(self.f, self.torque))
+
     def unpack_state_vector(self, y):
-        self.position = y[0:3]
-        self.v = y[3:6]
-        self.q = np.array([y[6], y[7], y[8], y[9]])
-        self.pose = utils.convert_quaternion_to_rotation_matrix(self.q)
-        self.omega = y[10:13]
+        self.state.position = y[0:3]
+        self.state.v = y[3:6]
+        self.state.q = np.array([y[6], y[7], y[8], y[9]])
+        self.state.pose = utils.convert_quaternion_to_rotation_matrix(self.state.q)
+        self.state.omega = y[10:13]
         self.f_disturb_implicit = y[13:16]
 
     def unpack_state_derivatives(self, y_dot):
@@ -108,20 +95,10 @@ class DroneDynamics:
             raise ValueError(result.message)
         return result.y.reshape(-1)    # convert an nx1 matrix to 1xn vector
 
-    def step_disturbance_force(self, t: float, state: np.ndarray):
-        self.disturbance.update_explicit_force(t, state, drone_propeller.convert_rpm_to_rps(self.rotor_spd_avg))
-        self.disturbance.update_explicit_torque(t, state, drone_propeller.convert_rpm_to_rps(self.rotor_spd_avg))
+    def step_disturbance_force(self, t: float):
+        self.disturbance.update_explicit_wrench(t, self.state, self.rotors, self.f, self.torque)
         self.f_disturb = self.disturbance.f_implicit + self.disturbance.f_explicit
         self.torque_disturb = self.disturbance.t_implicit + self.disturbance.t_explicit
-
-    def step_dynamics(self, t: float) -> None:
-        y_0 = self.pack_state_vector()
-        self.step_disturbance_force(t, y_0)
-        y_t = self.step_state_vector(y_0, t)
-        self.unpack_state_vector(y_t)
-        y_t_dot = self.get_derivatives_from_eom(t, y_t)   # argument t does affect output
-        self.unpack_state_derivatives(y_t_dot)
-        self.update_rotor_states()
 
     def get_derivatives_from_eom(self, t: float, y: np.ndarray) -> np.ndarray:
         '''
@@ -144,20 +121,22 @@ class DroneDynamics:
         v = y[3:6]
         q_instance = quaternion_updater.QuaternionOfRotation(np.quaternion(y[6], y[7], y[8], y[9]))
         omega = y[10:13]
-        omega_in_inertial_frame = self.pose@omega
+        omega_in_inertial_frame = self.state.pose@omega
         pose = utils.convert_quaternion_to_rotation_matrix(np.array([y[6], y[7], y[8], y[9]]))
         self.disturbance.f_implicit = y[13:16]
-        self.disturbance.update_explicit_force(t, y, drone_propeller.convert_rpm_to_rps(self.rotor_spd_avg))
-        self.disturbance.update_explicit_torque(t, y, drone_propeller.convert_rpm_to_rps(self.rotor_spd_avg))
+        state = State(position, v, 
+                      utils.convert_quaternion_to_rotation_matrix(np.array((y[6], y[7], y[8], y[9]))), 
+                      omega)
+        self.rotors.step_rotor_states(state, self.get_thrust_from_input(self.f, self.torque))
+        self.disturbance.update_explicit_wrench(t, state, self.rotors, self.f, self.torque)
 
         position_dot = v
-        v_dot = params.g*np.array([0.0, 0.0, 1.0]) + \
-                pose@(-self.f + self.disturbance.f_implicit + self.disturbance.f_explicit)/params.m
+        v_dot = params.Environment.g*np.array([0.0, 0.0, 1.0]) + \
+                pose@(-self.f + self.disturbance.f_implicit + self.disturbance.f_explicit)/self.drone.m
         q_instance.step_derivative(omega_in_inertial_frame)     # quaternion derivative takes omega in intertal frame
-        omega_dot = params.inertia_inv@(self.torque + self.disturbance.t_explicit + self.disturbance.t_implicit -
-                                        utils.get_hat_map(omega)@params.inertia@omega)
-        f_disturb_implicit_dot = self.disturbance.get_implicit_force_derivatives()
-        t_disturb_implicit_dot = self.disturbance.get_implicit_torque_derivatives()
+        omega_dot = self.drone.inertia_inv@(self.torque + self.disturbance.t_explicit + self.disturbance.t_implicit -
+                                        utils.get_hat_map(omega)@self.drone.inertia@omega)
+        f_disturb_implicit_dot, t_disturb_implicit_dot = self.disturbance.get_implicit_wrench_derivatives()
         y_dot = np.array([  position_dot[0],  # 0
                             position_dot[1],  # 1
                             position_dot[2],  # 2
@@ -179,53 +158,11 @@ class DroneDynamics:
                             t_disturb_implicit_dot[2]])  # 18
         return y_dot
     
-    def update_rotor_states(self) -> None:
-        """refresh rotor position and velocity
-        p_inertial_frame = p_frame + R*p_body_frame
-        v_inertial_frame = v_frame + cross(omega_inertial_frame, R)*p_body + R*v_body
-        """
-        new = []
-        for p in params.rotor_position:
-            new.append(self.position + p@self.pose.T)
-        self.rotor.loc[:, 'position'] = new
-
-        new = []
-        omega_r = np.cross(self.omega, self.pose.T).T # note the np.cross operation
-        for p in params.rotor_position:
-            new.append(self.v + omega_r@p)
-        self.rotor.loc[:, 'velocity'] = new
-        self.rotor_spd_avg = drone_propeller.prop_12x5.get_rotation_speed(self.f[2]/params.num_of_rotors)
+    def get_thrust_from_input(self, f: np.ndarray, torque: np.array) -> np.ndarray:
+        thrusts = self.drone.m_wrench_to_thrust@np.hstack((f[2], torque))
+        return thrusts
         
 
 if __name__ == "__main__":
-    x = np.array([0.0, 0.0, 0.0])
-    v1 = np.array([1.0, 2.0, 3.0])
-    pose1 = np.identity(3)
-    omega1 = np.array([np.pi/6, 0.0, 0.0])
-    dt1 = 1.0
-    kinematics = DroneDynamics(x, v1, pose1, omega1, dt1)
-    kinematics.step_dynamics(0.0)
-    pose_answer = np.array([[1.0, 0.0, 0.0],
-                       [0.0, np.cos(np.pi/6), -np.sin(np.pi/6)],
-                       [0.0, np.sin(np.pi/6), np.cos(np.pi/6)]])
-    position_answer = np.array([v1[0]*dt1, v1[1]*dt1, v1[2]*dt1 + 0.5*params.g*dt1*dt1])
-    print(kinematics.pose - pose_answer)
-    print(kinematics.position - position_answer)
-    dt1 = 0.01
-    kinematics = DroneDynamics(x, v1, pose1, omega1, dt1)
-    for i in range(100):
-        kinematics.step_dynamics(dt1*i)
-    print(kinematics.pose - pose_answer)
-    print(kinematics.position - position_answer)
-
-    kinematics.torque = np.array([1.0, 0.0, 0.0])
-    kinematics.step_dynamics(dt1*100)
-    print(kinematics.omega_dot - params.inertia_inv@kinematics.torque)
-
-    kinematics = DroneDynamics(x, v1, pose1, omega1, dt1)
-    kinematics.update_rotor_states()
-    print(kinematics.rotor)
-    kinematics = DroneDynamics(x + np.array([1.0, 2.0, 3.0]), v1, pose1, omega1, dt1)
-    kinematics.update_rotor_states()
-    print(kinematics.rotor)
+    pass
 

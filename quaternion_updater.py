@@ -28,7 +28,7 @@ class QuaternionOfRotation:
         Returns:
             np.ndarray: rotation matrix after rotattion
         """
-        r_t = np.identity(3)
+        r_t = np.eye(3)
         q_normalized = normalize_quaternion(self.q)
         q_normalized_conj = q_normalized.conjugate()
         for i in range(r_0.shape[1]):
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     t = 1
     q_test = utils.get_quaternion_from_angular_displacement(omega*t)
     test_instance = QuaternionOfRotation(q_test)
-    r_0_test = np.identity(3)
+    r_0_test = np.eye(3)
     r_t_test = test_instance.step_rotation_matrix(r_0_test)
     print(r_t_test)
 

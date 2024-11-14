@@ -7,11 +7,13 @@ import drone_parameters as params
 import drone_plot_utils
 
 class TrajectoryReference:
+    """Base class for trajectory reference generation. Derived classes should implement step_reference_state method.
+    """
     def __init__(self) -> None:
         self.init_x = np.array([0.0, 0.0, 0.0])
         self.init_v = np.array([0.0, 0.0, 0.0])
         self.init_omega = np.array([0.0, 0.0, 0.0])
-        self.init_pose = np.identity(3)        
+        self.init_pose = np.eye(3)        
         self.x_d = np.array([0.0, 0.0, 0.0])    # x_d
         self.v_d = np.array([0.0, 0.0, 0.0])    # x_d_dot
         self.x_d_dot2 = np.array([0.0, 0.0, 0.0])    # x_d_dot2
@@ -22,12 +24,19 @@ class TrajectoryReference:
         self.b_1d_dot2 = np.array([0.0, 0.0, 0.0])
 
     def set_init_state(self) -> None:
+        """Initial condition of the reference state"""
         pass
 
     def step_reference_state(self) -> None:
         raise NotImplementedError("Method needed for trajectory")
 
 class RandomWaypoints(TrajectoryReference):
+    """Generates a trajectory with random waypoints. This class calls trajectory_generation package as a tool. 
+
+    Args:
+        num_of_segments (int): Number of segments in the trajectory.
+        is_2d (bool, optional): If True, the trajectory will be constrained to 2D. Defaults to False.
+    """
     def __init__(self, num_of_segments, is_2d=False):
         super().__init__()  # Initialize parent class parameters
         self.is_2d = is_2d
@@ -270,7 +279,7 @@ class Hover(TrajectoryReference):
                                     [0.0, -0.9995, -0.0314],
                                     [0.0, 0.0314, -0.9995]])
         else:
-            self.init_pose = np.identity(3)
+            self.init_pose = np.eye(3)
 
 
 def plot_desired_pose(ax: plt.Axes, traj: TrajectoryReference, t_start, t_stop, dt = 0.1):
