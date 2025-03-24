@@ -1,23 +1,25 @@
 import unittest
 import numpy as np
 
-import drone_parameters 
-import drone_dynamics
-import drone_disturbance_model
-import drone_utils as utils
+import parameters 
+import dynamics
+import disturbance_model
+import propeller
+import dynamics_state as state
 
 class TestDroneDynamics(unittest.TestCase):
     def setUp(self):
-        self.drone = drone_parameters.TrackingOnSE3()
+        self.drone = parameters.TrackingOnSE3()
         self.position = np.array([0.0, 0.0, 0.0])
         self.v = np.array([1.0, 2.0, 3.0])
         self.pose = np.eye(3)
         self.omega = np.array([np.pi/6, 0.0, 0.0])
         self.dt = 0.01  # Time step
-        self.dynamics = drone_dynamics.DroneDynamics(
-            self.drone, self.position, self.v, self.pose, self.omega, self.dt
+        init_state = state.State(self.position, self.v, self.pose, self.omega)
+        self.dynamics = dynamics.DroneDynamics(
+            self.drone, propeller.apc_8x6, disturbance_model.Free(), init_state, self.dt
         )
-        self.dynamics.disturbance = drone_disturbance_model.Free()
+        
 
     def test_initialization(self):
         self.assertTrue(np.array_equal(self.dynamics.state.position, self.position))
@@ -67,7 +69,7 @@ class TestDroneDynamics(unittest.TestCase):
         pose_answer = np.array([[1.0, 0.0, 0.0],
                                 [0.0, np.cos(np.pi/6), -np.sin(np.pi/6)],
                                 [0.0, np.sin(np.pi/6), np.cos(np.pi/6)]])
-        position_answer = np.array([self.v[0]*dt, self.v[1]*dt, self.v[2]*dt + 0.5*drone_parameters.Environment.g*dt*dt])
+        position_answer = np.array([self.v[0]*dt, self.v[1]*dt, self.v[2]*dt + 0.5*parameters.Environment.g*dt*dt])
         np.testing.assert_array_almost_equal(self.dynamics.state.pose, pose_answer)
         np.testing.assert_array_almost_equal(self.dynamics.state.position, position_answer)
 
@@ -80,7 +82,7 @@ class TestDroneDynamics(unittest.TestCase):
                                 [0.0, np.cos(np.pi/6), -np.sin(np.pi/6)],
                                 [0.0, np.sin(np.pi/6), np.cos(np.pi/6)]])
         dt = 1.0
-        position_answer = np.array([self.v[0]*dt, self.v[1]*dt, self.v[2]*dt + 0.5*drone_parameters.Environment.g*dt*dt])
+        position_answer = np.array([self.v[0]*dt, self.v[1]*dt, self.v[2]*dt + 0.5*parameters.Environment.g*dt*dt])
         np.testing.assert_array_almost_equal(self.dynamics.state.pose, pose_answer, decimal=5)
         np.testing.assert_array_almost_equal(self.dynamics.state.position, position_answer, decimal=5)
 
@@ -89,19 +91,8 @@ class TestDroneDynamics(unittest.TestCase):
         self.dynamics.torque = np.array([1.0, 0.0, 0.0])
         self.dynamics.step_dynamics(self.dt*100)
         expected_omega_dot = self.drone.inertia_inv@self.dynamics.torque
-        print(self.dynamics.omega_dot - expected_omega_dot)
+        np.testing.assert_array_almost_equal(self.dynamics.omega_dot, expected_omega_dot)
 
-    def test_update_rotor_states(self):
-        self.dynamics.update_rotor_states()
-        print(self.dynamics.rotors.rotors[0].relative_position_body_frame)
-
-    # def test_update_rotor_states(self):
-    #     self.drone.update_rotor_states()
-    #     expected_positions = [self.position + p@self.drone.state.pose.T for p in params.rotor_position]
-    #     expected_velocities = [self.v + np.cross(self.omega, self.drone.state.pose.T).T@p for p in params.rotor_position]
-    #     for i, rotor in enumerate(self.drone.rotors.index):
-    #         np.testing.assert_almost_equal(self.drone.rotors.loc[rotor, 'position'], expected_positions[i], decimal=5)
-    #         np.testing.assert_almost_equal(self.drone.rotors.loc[rotor, 'velocity'], expected_velocities[i], decimal=5)
 
 if __name__ == '__main__':
     unittest.main()

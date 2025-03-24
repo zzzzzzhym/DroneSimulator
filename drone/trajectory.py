@@ -1,9 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt     # test only
 
-from drone_utils import KinematicVars
 from trajectory_generation import flight_map
-import drone_parameters as params
+import parameters as params
 import drone_plot_utils
 
 class TrajectoryReference:

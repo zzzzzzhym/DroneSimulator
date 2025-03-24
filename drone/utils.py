@@ -1,6 +1,6 @@
 import numpy as np
 import quaternion
-from enum import Enum, auto
+from enum import Enum
 from scipy.spatial.transform import Rotation as R
 
 

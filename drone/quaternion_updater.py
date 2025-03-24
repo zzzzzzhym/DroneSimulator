@@ -1,6 +1,7 @@
 import numpy as np
 import quaternion
-import drone_utils as utils
+
+import utils
 
 class QuaternionOfRotation:
     """this class handles change of rotation matrix, given a rotation operation represented by a quaternion 

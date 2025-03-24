@@ -1,11 +1,11 @@
 import numpy as np
 import warnings
 
-import drone_parameters as params
-import drone_dynamics_state
-import drone_propeller
-import drone_rotor
-import drone_utils as utils
+import parameters as params
+import dynamics_state
+import propeller
+import rotor
+import utils
 import inflow_model.propeller_lookup_table as propeller_lookup_table
 import flow_pass_object.flow_pass_flat_plate as flow_pass_flat_plate
 
@@ -40,7 +40,7 @@ class DisturbanceForce:
         self.t_implicit = np.zeros(3)
         self.t_explicit = np.zeros(3)
 
-    def update_explicit_wrench(self, t: float=0.0, state: drone_dynamics_state.State=None) -> None:
+    def update_explicit_wrench(self, t: float=0.0, state: dynamics_state.State=None) -> None:
         """API of explicit disturbance force
 
         Args:
@@ -69,18 +69,18 @@ class Free(DisturbanceForce):
     def __init__(self) -> None:
         super().__init__()
 
-    def update_explicit_wrench(self, t: float=0.0, state: drone_dynamics_state.State=None, dummy=0) -> None:
+    def update_explicit_wrench(self, *args, **kwargs) -> None:
         self.f_explicit = np.zeros(3)
         self.t_explicit = np.zeros(3)
 
-    def get_implicit_wrench_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
+    def get_implicit_wrench_derivatives(self, *args, **kwargs) -> np.ndarray:
         return np.zeros(3), np.zeros(3)
 
 class AirDrag(DisturbanceForce):
     def __init__(self) -> None:
         super().__init__()
 
-    def update_explicit_wrench(self, t: float=0.0, state: drone_dynamics_state.State=None) -> None:
+    def update_explicit_wrench(self, t: float=0.0, state: dynamics_state.State=None) -> None:
         self.f_explicit = self.get_air_drag(state.v)
         self.t_explicit = np.zeros(3)
 
@@ -116,7 +116,7 @@ class WallEffect(DisturbanceForce):
         self.max_torque = 0.02
         self.max_torque_dr = 4.0
         """Propeller model"""
-        self.propeller = drone_propeller.prop_kde4215xf465_6s_15_5x5_3_dual
+        self.propeller = propeller.prop_kde4215xf465_6s_15_5x5_3_dual
         super().__init__()
         print(f"Wall location {self.wall_origin}")
 
@@ -149,7 +149,7 @@ class WallEffect(DisturbanceForce):
         d = (location - self.wall_origin)@self.wall_norm
         return d
 
-    def update_explicit_wrench(self, t: float=0.0, state: drone_dynamics_state.State=None, rotor_spd: float=0.0) -> None:
+    def update_explicit_wrench(self, t: float=0.0, state: dynamics_state.State=None, rotor_spd: float=0.0) -> None:
         """F_wall = 0.5*C_F*rho_air*rotor_spd^2*d*4
         rotor_spd: rps
         """
@@ -172,7 +172,7 @@ class WindEffectNearWall(DisturbanceForce):
         self.wind_field_model = flow_pass_flat_plate.FlowPassFlatPlate.Interface(wall_norm, wall_origin, wall_length)
         self.u_free = np.array([-5.0, 0.0, 0.0])    # in FLU inertial frame
 
-    def update_explicit_wrench(self, t: float, state: drone_dynamics_state.State, rotor_set: drone_rotor.RotorSet, force_control, torque_control) -> None:
+    def update_explicit_wrench(self, t: float, state: dynamics_state.State, rotor_set: rotor.RotorSet, force_control, torque_control) -> None:
         """WARNING: To be tested
 
         Args:
@@ -205,6 +205,6 @@ class WindEffectNearWall(DisturbanceForce):
 
 if __name__ == "__main__":
     wall = WallEffect()
-    wall.update_explicit_wrench(0.0, drone_dynamics_state.State(), rotor_spd=2000.0/60)
+    wall.update_explicit_wrench(0.0, dynamics_state.State(), rotor_spd=2000.0/60)
     print(wall.f_explicit)
     print(wall.t_explicit)

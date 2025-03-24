@@ -1,15 +1,17 @@
 import numpy as np
 from scipy.integrate import solve_ivp
+
 import quaternion_updater
-import drone_parameters as params
-import drone_utils as utils
-import drone_disturbance_model
-import drone_propeller
-import drone_rotor
-from drone_dynamics_state import State
+import parameters as params
+import utils
+import disturbance_model
+import propeller
+import rotor
+from dynamics_state import State
+
 
 class DroneDynamics:
-    def __init__(self, drone: params.Drone, propeller: drone_propeller.Propeller, disturbance: drone_disturbance_model.DisturbanceForce, init_state: State, dt: float = 0.01) -> None:
+    def __init__(self, drone: params.Drone, propeller: propeller.Propeller, disturbance: disturbance_model.DisturbanceForce, init_state: State, dt: float = 0.01) -> None:
         """
         pose is a 3x3 rotation matrix from body to inertial frame
         omega is in body fix frame
@@ -30,7 +32,7 @@ class DroneDynamics:
         self.f_disturb = self.disturbance.f_implicit + self.disturbance.f_explicit
         self.torque_disturb = self.disturbance.t_implicit + self.disturbance.t_explicit
         # rotor states
-        self.rotors = drone_rotor.RotorSet(self.drone, propeller)
+        self.rotors = rotor.RotorSet(self.drone, propeller)
         self.rotor_spd_avg = 0.0    # rpm
 
 

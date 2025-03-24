@@ -1,9 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 import torch
 
-from learning import model
 from learning import trainer
 
 class UnitDisturbance:

@@ -1,11 +1,11 @@
 import unittest
 import numpy as np
 
-import drone_parameters 
+import parameters 
 
 class TestGeometry(unittest.TestCase):
     def test_get_thrust_wrench_matrix(self):
-        test_instance = drone_parameters.TrackingOnSE3()
+        test_instance = parameters.TrackingOnSE3()
         d = test_instance.p_0[0]
         c_tau_f = test_instance.c_tau_f
         expected_matrix = np.array([[ 1.0,     1.0,     1.0,      1.0],         # thrust
