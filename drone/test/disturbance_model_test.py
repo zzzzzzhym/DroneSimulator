@@ -1,11 +1,11 @@
 import unittest
 import numpy as np
 
-import drone_disturbance_model as disturbance
-import drone_dynamics_state as state
-import drone_rotor as rotor
-import drone_propeller as propeller
-import drone_parameters as params
+import parameters as params
+import disturbance_model as disturbance
+import dynamics_state as state
+import rotor
+import propeller
 
 class TestWindEffectNearWall(unittest.TestCase):
     def test_update_explicit_wrench(self):

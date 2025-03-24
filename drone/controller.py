@@ -1,10 +1,10 @@
 import numpy as np
-import drone_utils as utils
-import drone_dynamics as dynamics
-import drone_parameters as params
-import drone_utils as utils
-import drone_trajectory as trajectory
-import drone_disturbance_estimator as disturbance_estimator
+
+import utils
+import dynamics
+import parameters as params
+import trajectory
+import disturbance_estimator
 
 class DroneController:
     def __init__(self, drone: params.Drone) -> None:

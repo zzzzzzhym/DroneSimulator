@@ -1,17 +1,16 @@
 import numpy as np
-import quaternion
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 
-import drone_trajectory as trajectory
-import drone_dynamics as dynamics
-import drone_dynamics_state as state
-import drone_controller as controller
-import drone_propeller as propeller
-import drone_disturbance_model as disturbance
-import drone_utils as utils
-import drone_parameters as params
+import drone.trajectory as trajectory
+import drone.dynamics as dynamics
+import drone.dynamics_state as state
+import drone.controller as controller
+import drone.propeller as propeller
+import drone.disturbance_model as disturbance
+import drone.utils as utils
+import drone.parameters as params
 import drone_plot_utils
 
 class DroneSimulator:

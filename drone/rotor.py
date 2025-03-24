@@ -10,19 +10,16 @@ Date: 2024-09-22
 """
 
 import numpy as np
-import drone_parameters as params
-from dataclasses import dataclass
-from scipy.interpolate import interp1d
-import matplotlib.pyplot as plt
 
-import drone_propeller
-import drone_utils as utils
-import drone_dynamics_state as state
+import parameters as params
+import propeller
+import utils
+import dynamics_state as state
 
 class Rotor:
     """This class manage the state of individual rotor and its relationship to the drone. It may include rotor center velocity, rotor position and rotor pose. 
     """
-    def __init__(self, propeller: drone_propeller.Propeller, relative_position_body_frame: np.ndarray, is_ccw_blade: bool) -> None:
+    def __init__(self, propeller: propeller.Propeller, relative_position_body_frame: np.ndarray, is_ccw_blade: bool) -> None:
         self.is_ccw_blade = is_ccw_blade
         self.rotation_speed = 0             # rotation speed [rad/s]
         self.velocity_inertial_frame = np.zeros(3)  # rotor center velocity in inertial frame
@@ -62,7 +59,7 @@ class Rotor:
     
 class RotorSet:
     """This class manage the collection of all rotors on the drone."""    
-    def __init__(self, drone: params.Drone, propeller: drone_propeller.Propeller) -> None:
+    def __init__(self, drone: params.Drone, propeller: propeller.Propeller) -> None:
         self.params = drone.get_rotor_data()
         self.rotors: list[Rotor] = [
             Rotor(propeller, position, blade) 

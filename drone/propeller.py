@@ -1,6 +1,4 @@
 import numpy as np
-from dataclasses import dataclass
-from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
 class Propeller:
