@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt     # test only
 
 from trajectory_generation import flight_map
 import parameters as params
-import drone_plot_utils
+import simulation.plot_utils as plot_utils
 
 class TrajectoryReference:
     """Base class for trajectory reference generation. Derived classes should implement step_reference_state method.
@@ -282,7 +282,7 @@ class Hover(TrajectoryReference):
 
 
 def plot_desired_pose(ax: plt.Axes, traj: TrajectoryReference, t_start, t_stop, dt = 0.1):
-    g = np.array([0, 0, params.g])  # z points down
+    g = np.array([0, 0, params.Environment.g])  # z points down
     t_span = np.arange(t_start, t_stop, 0.1)
     for t in t_span:
         traj.step_reference_state(t)
@@ -291,10 +291,10 @@ def plot_desired_pose(ax: plt.Axes, traj: TrajectoryReference, t_start, t_stop, 
         norm = np.sqrt(b_3d@b_3d)
         if norm < 0.0001:
             b_3d = -0.0001*g
-            norm = 0.0001*params.g
+            norm = 0.0001*params.Environment.g
         b_3d = b_3d/norm
         b_2d = np.cross(b_3d, b_1d)
-        b1b2, b3 = drone_plot_utils.generate_drone_profile(traj.x_d, np.vstack([b_1d,b_2d,b_3d]).T)
+        b1b2, b3 = plot_utils.generate_drone_profile(traj.x_d, np.vstack([b_1d,b_2d,b_3d]).T)
         ax.plot(b1b2[:, 0],
                 b1b2[:, 1],
                 b1b2[:, 2], 'orange')
