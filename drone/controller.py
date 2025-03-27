@@ -156,7 +156,7 @@ class DroneController:
         self.e_omega = state.state.omega - state.state.pose.T@self.omega_desired
 
     def step_error_function_so3(self, state: dynamics.DroneDynamics):
-        '''
+        '''The error function on SO(3) is defined as the angle between the desired and actual rotation matrix.
         debug purpose only, does not need to use in controller
         '''
         self.psi_r_rd = 0.5*(1 - self.pose_desired[:,0]@state.state.pose[:,0] +

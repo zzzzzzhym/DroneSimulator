@@ -1,0 +1,176 @@
+# defines the data to be logged in the simulation
+position:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: true
+q:
+  components:
+    - "0"
+    - "1"
+    - "2"
+    - "3"
+  can_save_to_file: true
+v:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: true
+dv:
+  components:
+    - x
+    - y
+    - z
+e_x:
+  components:
+    - x
+    - y
+    - z
+e_v:
+  components:
+    - x
+    - y
+    - z
+e_a:
+  components:
+    - x
+    - y
+    - z
+e_j:
+  components:
+    - x
+    - y
+    - z
+e_r:
+  components:
+    - x
+    - y
+    - z
+e_omega:
+  components:
+    - x
+    - y
+    - z
+psi_r_rd:
+  components: [] # not for logging
+f_ctrl_input:
+  components:
+    - x
+    - y
+    - z
+f_ctrl_input_dot:
+  components:
+    - x
+    - y
+    - z
+f_d:
+  components:
+    - x
+    - y
+    - z
+f_d_dot:
+  components:
+    - x
+    - y
+    - z
+f_d_dot2:
+  components:
+    - x
+    - y
+    - z
+torque_ctrl_input:
+  components:
+    - x
+    - y
+    - z
+x_d:
+  components:
+    - x
+    - y
+    - z
+v_d:
+  components:
+    - x
+    - y
+    - z
+x_d_dot2:
+  components:
+    - x
+    - y
+    - z
+x_d_dot3:
+  components:
+    - x
+    - y
+    - z
+f_motor:
+  components:
+    - "0"
+    - "1"
+    - "2"
+    - "3"
+f_disturb:
+  components:
+    - x
+    - y
+    - z
+f_disturb_est:
+  components:
+    - x
+    - y
+    - z
+f_disturb_est_base:
+  components:
+    - x
+    - y
+    - z
+torque_disturb:
+  components:
+    - x
+    - y
+    - z
+torque_disturb_est:
+  components:
+    - x
+    - y
+    - z
+torque_disturb_est_base:
+  components:
+    - x
+    - y
+    - z
+omega:
+  components:
+    - x
+    - y
+    - z
+omega_dot:
+  components:
+    - x
+    - y
+    - z
+omega_desired:
+  components:
+    - x
+    - y
+    - z
+pose:
+  components: [] # not for logging
+pose_dot:
+  components: [] # not for logging
+pose_desired:
+  components: [] # not for logging
+pose_desired_dot:
+  components: [] # not for logging
+pose_desired_dot2:
+  components: [] # not for logging
+rotor_spd:
+  components:
+    - "0"
+    - "1"
+    - "2"
+    - "3"
+b_1d:
+  components: []
