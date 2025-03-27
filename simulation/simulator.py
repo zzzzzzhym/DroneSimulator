@@ -11,9 +11,9 @@ import drone.propeller as propeller
 import drone.disturbance_model as disturbance
 import drone.utils as utils
 import drone.parameters as params
-import drone_plot_utils
+import plot_utils
 
-class DroneSimulator:
+class Engine:
     """
     Controller + Dynamics
     """
@@ -646,7 +646,7 @@ class DroneSimulator:
         axs9.plot3D(self.logger_np["position"][:, 0],
                     self.logger_np["position"][:, 1],
                     self.logger_np["position"][:, 2], 'green')
-        b1b2, b3 = drone_plot_utils.generate_drone_profile(
+        b1b2, b3 = plot_utils.generate_drone_profile(
             self.sim_dynamics.state.position, self.sim_dynamics.state.pose)
         axs9.plot3D(b1b2[:, 0],
                     b1b2[:, 1],
@@ -654,7 +654,7 @@ class DroneSimulator:
         axs9.plot3D(b3[:, 0],
                     b3[:, 1],
                     b3[:, 2], 'red')
-        b1b2, b3 = drone_plot_utils.generate_drone_profile(
+        b1b2, b3 = plot_utils.generate_drone_profile(
             self.sim_dynamics.state.position, self.sim_controller.pose_desired)
         axs9.plot3D(b1b2[:, 0],
                     b1b2[:, 1],
@@ -705,14 +705,14 @@ class DroneSimulator:
         return ani
 
 def update_frame(ax: plt.Axes, text, pos: np.ndarray, pose_ref: np.ndarray, pose_meas: np.ndarray, t: float):
-    b1b2, b3 = drone_plot_utils.generate_drone_profile(pos, pose_ref)
+    b1b2, b3 = plot_utils.generate_drone_profile(pos, pose_ref)
     ax.plot(b1b2[:, 0],
             b1b2[:, 1],
             b1b2[:, 2], 'orange')
     ax.plot(b3[:, 0],
             b3[:, 1],
             b3[:, 2], 'orange')
-    b1b2, b3 = drone_plot_utils.generate_drone_profile(pos, pose_meas)
+    b1b2, b3 = plot_utils.generate_drone_profile(pos, pose_meas)
     ax.plot(b1b2[:, 0],
             b1b2[:, 1],
             b1b2[:, 2], 'red')
@@ -724,7 +724,7 @@ def update_frame(ax: plt.Axes, text, pos: np.ndarray, pose_ref: np.ndarray, pose
 
 
 if __name__ == "__main__":
-    sim_test = DroneSimulator()
+    sim_test = Engine()
     sim_test.run_simulation(30)
     sim_test.make_plots(True)
     plt.show()
