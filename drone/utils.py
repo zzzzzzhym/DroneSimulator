@@ -40,9 +40,12 @@ def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.nda
     v_norm = np.linalg.norm(v)
     if v_norm < 0.001:
         print("Warning: get_vector_norm_derivatives: vector norm too small to get unit vector result")
-    v_norm_dot = v@v_dot/v_norm
-    v_norm_dot2 = v_dot@v_dot/v_norm + \
-        (v@v_dot2)/v_norm - (v@v_dot*v_norm_dot)/v_norm**2
+        v_norm_dot = 0
+        v_norm_dot2 = 0
+    else:
+        v_norm_dot = v@v_dot/v_norm
+        v_norm_dot2 = v_dot@v_dot/v_norm + \
+            (v@v_dot2)/v_norm - (v@v_dot*v_norm_dot)/v_norm**2
     return (v_norm, v_norm_dot, v_norm_dot2)
 
 
@@ -121,18 +124,38 @@ def convert_quaternion_to_rotation_matrix(q: np.ndarray) -> np.ndarray:
     rotation = R.from_quat(q_compatible)
     return rotation.as_matrix() 
 
+def saturate_vector_norm(v: np.ndarray, max_norm: float) -> np.ndarray:
+    """saturate the vector norm to max_norm
+    """
+    v_norm = np.linalg.norm(v)
+    if v_norm > max_norm:
+        return v/v_norm*max_norm
+    else:
+        return v
+
 class FrdFluConverter:
     m_frd_flu = np.array([[1, 0, 0],
                           [0, -1, 0],
                           [0, 0, -1]])  # m_frd_flu.T = m_frd_flu so both direction of conversion use the same matrix
     
     @staticmethod
-    def flip(x: np.ndarray):
+    def flip_vector(x: np.ndarray):
         """x can be a vector or rotation matrix
         if x is in FRD frame, convert it to FLU frame
         if x is in FLU frame, convert it to FRD frame
         """
         return FrdFluConverter.m_frd_flu@x
+    
+    @staticmethod
+    def flip_pose(x: np.ndarray):
+        """x is a rotation matrix in original frame,
+        result is a rotation matrix in the flipped frame representation the same rotation
+        e.g. drone pose in defined in FRD frame, rotor is defined in FLU frame
+        they share the same rotation because they share the same body
+        then the pose matrix relation is pose_rotor = flip_pose(pose_drone)
+        This is convert the frame -> rotate -> convert back to the original frame
+        """
+        return FrdFluConverter.m_frd_flu@x@FrdFluConverter.m_frd_flu
     
 def convert_rpm_to_radps(rpm):
     return rpm/60*2*np.pi

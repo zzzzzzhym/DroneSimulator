@@ -1,0 +1,44 @@
+input:
+  8:
+    mean: 0.0
+    scale: 1.0
+  9:
+    mean: 0.0
+    scale: 1.0
+  10:
+    mean: 0.0
+    scale: 1.0
+  14:
+    mean: 0.0
+    scale: 1.0
+  15:
+    mean: 0.0
+    scale: 1.0
+  16:
+    mean: 0.0
+    scale: 1.0
+  17:
+    mean: 0.0
+    scale: 1.0
+  39:
+    mean: 0.0
+    scale: 0.001
+  40:
+    mean: 0.0
+    scale: 0.001
+  41:
+    mean: 0.0
+    scale: 0.001
+  42:
+    mean: 0.0
+    scale: 0.001
+output:
+  36:
+    mean: 0.0
+    scale: 1.0
+  37:
+    mean: 0.0
+    scale: 1.0
+  38:
+    mean: 0.0
+    scale: 1.0

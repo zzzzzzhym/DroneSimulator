@@ -6,16 +6,23 @@ from learning import trainer
 
 class UnitDisturbance:
     """disturbance in a single dimension
+    According to the paper, "We found that the three components of the wind-effect force, 
+    fx fy fz, are highly correlated and sharing common features, 
+    so we use theta as the basis function for all the component. ", this class can be applied to fx fy fz. 
+    Irrationally, we're also using it to estimate torque—even though torque isn't part of the network's training.
     """
-    def __init__(self, num_of_kernels, dt: float) -> None:
+    def __init__(self, num_of_kernels, dt: float, mean=0.0, scale=1.0) -> None:
         self.disturbance = 0
         self.a_hat = np.zeros([num_of_kernels, 1])   # estimated a matrix
         self.p_cov = np.eye(num_of_kernels)     # covariance matrix, p_cov.shape = dim_of_a_hat*dim_of_a_hat
         self.lambda_reg = np.eye(num_of_kernels)*0.01
         self.dt = dt
-        self.r = np.eye(1)  # measurement noise, r.shape = (measured disturbance dimension)^2
+        self.r = np.eye(1)*20  # measurement noise, r.shape = (measured disturbance dimension)^2
         self.q = np.eye(num_of_kernels)    # process noise, q.shape = p_cov.shape   
-        self.model_scale = 10 # normalization factor for the model labels
+        self.scale = scale # normalization factor for the model labels, (raw - mean)*scale = normalized
+        self.mean = mean # normalization factor for the model labels, (raw - mean)*scale = normalized
+        if self.scale < 1e-6:
+            raise ValueError("scale should be larger than 1e-6")
 
     @staticmethod
     def update_adaptation(a_hat: np.ndarray, 
@@ -59,12 +66,26 @@ class UnitDisturbance:
         s = np.atleast_2d(s_vec).T
         y = np.atleast_2d(y_vec).T
         prediction_error = phi @ a_hat - y
-        a_hat_dot = -lambda_val @ a_hat - p @ phi.T @ np.linalg.inv(r) @ prediction_error + p @ phi.T @ s
-        a_hat_new = a_hat + a_hat_dot * dt
 
-        # Equation 9 - Update for P
-        p_dot = -2 * lambda_val * p + q - p @ phi.T @ np.linalg.inv(r) @ phi @ p
-        p_new = p + p_dot * dt
+        # The continuous time version has a stability issue:
+        # a_hat_dot = -lambda_val @ a_hat - p @ phi.T @ np.linalg.inv(r) @ prediction_error + p @ phi.T @ s
+        # a_hat_new = a_hat + a_hat_dot * dt  # source of instability
+
+        # # Equation 9 - Update for P
+        # p_dot = -2 * lambda_val * p + q - p @ phi.T @ np.linalg.inv(r) @ phi @ p
+        # p_new = p + p_dot * dt  # source of instability
+
+        # use discrete Kalman filter to update a_hat and p
+        s_covaraince = phi @ p @ phi.T + r  # Innovation covariance (the covariance of prediction_error, not the tracking error)
+        k = p @ phi.T @ np.linalg.inv(s_covaraince)
+
+        # Update a_hat
+        prediction_error = y - phi @ a_hat
+        a_hat_new = a_hat - lambda_val @ a_hat * dt + k @ prediction_error + p @ phi.T @ s * dt
+
+        # Update p (Joseph form for stability)
+        i_p = np.eye(p.shape[0])    # identity matrix of the same size as p
+        p_new = (i_p - k @ phi) @ p @ (i_p - k @ phi).T + k @ r @ k.T + q * dt  # add Q over dt
 
         return a_hat_new, p_new     
 
@@ -77,34 +98,44 @@ class UnitDisturbance:
             measured_disturbance (np.ndarray): The measured aerodynamic residual force.
             tracking_error (np.ndarray): The composite tracking error, defined as s = dot(q) - dot(q_r).
         """
-        self.a_hat, self.p_cov = self.update_adaptation(self.a_hat, self.p_cov, kernel, measured_disturbance*self.model_scale, tracking_error, self.r, self.q, self.lambda_reg, self.dt)
+        self.a_hat, self.p_cov = self.update_adaptation(self.a_hat, self.p_cov, kernel, self.normalize(measured_disturbance), tracking_error, self.r, self.q, self.lambda_reg, self.dt)
         self.disturbance = self.get_disturbance(kernel)
 
     def get_disturbance(self, kernel: np.ndarray):
-        disturbance = np.atleast_2d(kernel)@self.a_hat*(1/self.model_scale)
+        disturbance = np.atleast_2d(kernel)@self.a_hat*(1/self.scale) + self.mean
+        disturbance = self.denormalize(np.atleast_2d(kernel)@self.a_hat)
         return disturbance[0, 0]
+    
+    def normalize(self, original: np.ndarray) -> np.ndarray:
+        """normalize the disturbance"""
+        return (original - self.mean) * self.scale
+    
+    def denormalize(self, normalized: np.ndarray) -> np.ndarray:
+        """denormalize the output to get disturbance"""
+        return normalized / self.scale + self.mean
 
 class DisturbanceEstimator:
     def __init__(self, model_name: str, dt: float) -> None:
-        self.phi, h, config = trainer.load_model(model_name)
+        self.phi, h, self.config = trainer.load_model(model_name)
         self.phi.eval()
-        self.num_of_kernals = config.phi_net.dim_of_output
+        self.num_of_kernals = self.config["phi_net_input_args"]["dim_of_output"]
         self.dof_of_disturbance = 6
         self.dt = 0.01
-        self.f_x = UnitDisturbance(self.num_of_kernals, self.dt)
-        self.f_y = UnitDisturbance(self.num_of_kernals, self.dt)
-        self.f_z = UnitDisturbance(self.num_of_kernals, self.dt)
+        self.f_x = UnitDisturbance(self.num_of_kernals, self.dt, self.phi.output_mean[0].numpy(), self.phi.output_scale[0].numpy())
+        self.f_y = UnitDisturbance(self.num_of_kernals, self.dt, self.phi.output_mean[1].numpy(), self.phi.output_scale[1].numpy())
+        self.f_z = UnitDisturbance(self.num_of_kernals, self.dt, self.phi.output_mean[2].numpy(), self.phi.output_scale[2].numpy())
         self.tq_x = UnitDisturbance(self.num_of_kernals, self.dt)
         self.tq_y = UnitDisturbance(self.num_of_kernals, self.dt)
         self.tq_z = UnitDisturbance(self.num_of_kernals, self.dt)
 
-    def update_kernel(self, v: np.ndarray, q: np.ndarray, f: np.ndarray) -> np.ndarray:
+    def update_kernel(self, position: np.ndarray, v: np.ndarray, q: np.ndarray, omega: np.ndarray, f: np.ndarray, tq: np.ndarray, rotor_spd: np.ndarray) -> np.ndarray:
+        nn_input = np.hstack([position, v, q, omega, f, tq, rotor_spd])
         with torch.no_grad():
-            kernel = self.phi(torch.from_numpy(np.hstack([v, q, f])))
+            kernel = self.phi(torch.from_numpy(nn_input))
         return kernel.numpy()
     
-    def step_disturbance(self,  v: np.ndarray, q: np.ndarray, f: np.ndarray, measured_disturbance: np.ndarray, tracking_error: np.ndarray) -> None:
-        self.kernel = self.update_kernel(v, q, f)
+    def step_disturbance(self,  position: np.array, v: np.ndarray, q: np.ndarray, omega: np.ndarray, f: np.ndarray, tq: np.ndarray, rotor_spd: np.ndarray, measured_disturbance: np.ndarray, tracking_error: np.ndarray) -> None:
+        self.kernel = self.update_kernel(position, v, q, omega, f, tq, rotor_spd)
         self.f_x.step_estimator(self.kernel, measured_disturbance[0], tracking_error[0])
         self.f_y.step_estimator(self.kernel, measured_disturbance[1], tracking_error[1])
         self.f_z.step_estimator(self.kernel, measured_disturbance[2], tracking_error[2])

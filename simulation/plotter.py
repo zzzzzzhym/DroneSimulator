@@ -15,13 +15,13 @@ class Plotter:
         # self.plot_position_and_derivatives(logger_output)
         # self.plot_omega_and_derivatives(logger_output)
         # self.plot_pose_and_derivatives(logger_output)
-        ## self.plot_trajectory(logger_output)
         # self.plot_quaternion(logger_output)
+        self.plot_trajectory(logger_output)
         self.plot_force_and_torque(logger_output)
         self.plot_position_tracking_error(logger_output)
         self.plot_pose_tracking_error(logger_output)
-        self.plot_desired_force(logger_output)
-        self.plot_control_input_force(logger_output)
+        # self.plot_desired_force(logger_output)
+        # self.plot_control_input_force(logger_output)
         self.plot_pose_desired(logger_output)
         self.plot_omega_desired(logger_output)
         self.plot_rotor(logger_output)
@@ -118,6 +118,9 @@ class Plotter:
         axs1[0, 2].plot(self.t_span, logger["pose"][:, 0, 2], marker='x')
         axs1[1, 2].plot(self.t_span, logger["pose"][:, 1, 2], marker='x')
         axs1[2, 2].plot(self.t_span, logger["pose"][:, 2, 2], marker='x')
+        for i in range(3):
+            for j in range(3):
+                axs1[i, j].set_ylim(-1, 1)
 
         axs1[0, 3].plot(self.t_span, logger["pose_dot"][:, 0, 0], marker='x')
         axs1[1, 3].plot(self.t_span, logger["pose_dot"][:, 1, 0], marker='x')
@@ -128,72 +131,111 @@ class Plotter:
         axs1[0, 5].plot(self.t_span, logger["pose_dot"][:, 0, 2], marker='x')
         axs1[1, 5].plot(self.t_span, logger["pose_dot"][:, 1, 2], marker='x')
         axs1[2, 5].plot(self.t_span, logger["pose_dot"][:, 2, 2], marker='x')
-        t_diff, pose_diff = utils.get_signal_derivative(self.t_span, logger["pose"], self.dt)
-        axs1[0, 3].plot(t_diff, pose_diff[:, 0, 0], marker='.')
-        axs1[1, 3].plot(t_diff, pose_diff[:, 1, 0], marker='.')
-        axs1[2, 3].plot(t_diff, pose_diff[:, 2, 0], marker='.')
-        axs1[0, 4].plot(t_diff, pose_diff[:, 0, 1], marker='.')
-        axs1[1, 4].plot(t_diff, pose_diff[:, 1, 1], marker='.')
-        axs1[2, 4].plot(t_diff, pose_diff[:, 2, 1], marker='.')
-        axs1[0, 5].plot(t_diff, pose_diff[:, 0, 2], marker='.')
-        axs1[1, 5].plot(t_diff, pose_diff[:, 1, 2], marker='.')
-        axs1[2, 5].plot(t_diff, pose_diff[:, 2, 2], marker='.')
 
     def plot_trajectory(self, logger: np.ndarray):
         fig, axs = plt.subplots(3, 4, sharex=True)
         fig.suptitle('trajectory')
-        axs[0, 0].plot(self.t_span, logger["x_d"][:, 0], marker='x')
+        axs[0, 0].plot(self.t_span, logger["x_d"][:, 0], marker='.')
         axs[0, 0].set_ylabel('x')
-        axs[1, 0].plot(self.t_span, logger["x_d"][:, 1], marker='x')
+        axs[1, 0].plot(self.t_span, logger["x_d"][:, 1], marker='.')
         axs[1, 0].set_ylabel('y')
-        axs[2, 0].plot(self.t_span, logger["x_d"][:, 2], marker='x')
+        axs[2, 0].plot(self.t_span, logger["x_d"][:, 2], marker='.')
         axs[2, 0].set_ylabel('z')
-        axs[0, 1].plot(self.t_span, logger["v_d"][:, 0], marker='x')
+        axs[0, 1].plot(self.t_span, logger["v_d"][:, 0], marker='.')
         axs[0, 1].set_ylabel('v_x')
-        axs[1, 1].plot(self.t_span, logger["v_d"][:, 1], marker='x')
+        axs[1, 1].plot(self.t_span, logger["v_d"][:, 1], marker='.')
         axs[1, 1].set_ylabel('v_y')
-        axs[2, 1].plot(self.t_span, logger["v_d"][:, 2], marker='x')
+        axs[2, 1].plot(self.t_span, logger["v_d"][:, 2], marker='.')
         axs[2, 1].set_ylabel('v_z')
-        t_diff, x_d_diff = utils.get_signal_derivative(self.t_span, logger["x_d"], self.dt)
-        axs[0, 1].plot(t_diff, x_d_diff[:, 0], marker='.')
-        axs[1, 1].plot(t_diff, x_d_diff[:, 1], marker='.')
-        axs[2, 1].plot(t_diff, x_d_diff[:, 2], marker='.')
 
-        axs[0, 2].plot(self.t_span, logger["x_d_dot2"][:, 0], marker='x')
-        axs[1, 2].plot(self.t_span, logger["x_d_dot2"][:, 1], marker='x')
-        axs[2, 2].plot(self.t_span, logger["x_d_dot2"][:, 2], marker='x')
-        t_diff, v_d_diff = utils.get_signal_derivative(self.t_span, logger["v_d"], self.dt)
-        axs[0, 2].plot(t_diff, v_d_diff[:, 0], marker='.')
-        axs[1, 2].plot(t_diff, v_d_diff[:, 1], marker='.')
-        axs[2, 2].plot(t_diff, v_d_diff[:, 2], marker='.')
+        axs[0, 2].plot(self.t_span, logger["x_d_dot2"][:, 0], marker='.')
+        axs[1, 2].plot(self.t_span, logger["x_d_dot2"][:, 1], marker='.')
+        axs[2, 2].plot(self.t_span, logger["x_d_dot2"][:, 2], marker='.')
+        axs[0, 2].set_ylabel('x_ddot')
+        axs[1, 2].set_ylabel('y_ddot')
+        axs[2, 2].set_ylabel('z_ddot')
 
-        axs[0, 3].plot(self.t_span, logger["x_d_dot3"][:, 0], marker='x')
-        axs[1, 3].plot(self.t_span, logger["x_d_dot3"][:, 1], marker='x')
-        axs[2, 3].plot(self.t_span, logger["x_d_dot3"][:, 2], marker='x')
-        t_diff, x_d_dot2_diff = utils.get_signal_derivative(self.t_span, logger["x_d_dot2"], self.dt)
-        axs[0, 3].plot(t_diff, x_d_dot2_diff[:, 0], marker='.')
-        axs[1, 3].plot(t_diff, x_d_dot2_diff[:, 1], marker='.')
-        axs[2, 3].plot(t_diff, x_d_dot2_diff[:, 2], marker='.')
+        axs[0, 3].plot(self.t_span, logger["x_d_dot3"][:, 0], marker='.')
+        axs[1, 3].plot(self.t_span, logger["x_d_dot3"][:, 1], marker='.')
+        axs[2, 3].plot(self.t_span, logger["x_d_dot3"][:, 2], marker='.')
+        axs[0, 3].set_ylabel('x_dddot')
+        axs[1, 3].set_ylabel('y_dddot')
+        axs[2, 3].set_ylabel('z_dddot')
 
     def plot_force_and_torque(self, logger: np.ndarray):
-        fig, axs = plt.subplots(3, 2, sharex=True)
+        fig, axs = plt.subplots(4, 2, sharex=True)
         fig.suptitle('force_and_torque')
-        axs[0, 0].plot(self.t_span, logger["f_ctrl_input"][:, 0], marker='x')
-        axs[0, 0].plot(self.t_span, logger["f_d"][:, 0])
-        axs[1, 0].plot(self.t_span, logger["f_ctrl_input"][:, 1], marker='x')
-        axs[1, 0].plot(self.t_span, logger["f_d"][:, 1])
-        axs[2, 0].plot(self.t_span, logger["f_ctrl_input"][:, 2], marker='x')
-        axs[2, 0].plot(self.t_span, logger["f_d"][:, 2])
+        axs[0, 0].plot(self.t_span, logger["f_d"][:, 0], marker='x', label="f_d_x")
+        axs[0, 0].plot(self.t_span, logger["f_ctrl_input"][:, 0], marker='.', label="f_ctrl_input_x")
+        axs[0, 0].plot(self.t_span, logger["f_feedback"][:, 0], label="f_feedback_x")
+        axs[0, 0].plot(self.t_span, logger["f_feedforward"][:, 0], label="f_feedforward_x")
+        axs[0, 0].plot(self.t_span, logger["f_disturb_compensation"][:, 0], label="f_disturb_compensation_x")
+        axs[1, 0].plot(self.t_span, logger["f_d"][:, 1], marker='x', label="f_d_y")
+        axs[1, 0].plot(self.t_span, logger["f_ctrl_input"][:, 1], marker='.', label="f_ctrl_input_y")
+        axs[1, 0].plot(self.t_span, logger["f_feedback"][:, 1], label="f_feedback_y")
+        axs[1, 0].plot(self.t_span, logger["f_feedforward"][:, 1], label="f_feedforward_y")
+        axs[1, 0].plot(self.t_span, logger["f_disturb_compensation"][:, 1], label="f_disturb_compensation_y")        
+        axs[2, 0].plot(self.t_span, logger["f_d"][:, 2], marker='x', label="f_d_z")
+        axs[2, 0].plot(self.t_span, logger["f_ctrl_input"][:, 2], marker='.', label="f_ctrl_input_z")
+        axs[2, 0].plot(self.t_span, logger["f_feedback"][:, 2], label="f_feedback_z")
+        axs[2, 0].plot(self.t_span, logger["f_feedforward"][:, 2], label="f_feedforward_z")
+        axs[2, 0].plot(self.t_span, logger["f_disturb_compensation"][:, 2], label="f_disturb_compensation_z")
+        axs[0, 0].legend()
+        axs[1, 0].legend()
+        axs[2, 0].legend()
+        axs[3, 0].plot(self.t_span, np.sqrt(logger["f_d"][:, 0]**2 + 
+            logger["f_d"][:, 1]**2 +
+            logger["f_d"][:, 2]**2), marker='x', label="f_d_norm")
+        axs[3, 0].plot(self.t_span, np.sqrt(logger["f_ctrl_input"][:, 0]**2 + 
+            logger["f_ctrl_input"][:, 1]**2 +
+            logger["f_ctrl_input"][:, 2]**2), marker='.', label="f_ctrl_input_norm")
+        axs[3, 0].plot(self.t_span, np.sqrt(logger["f_feedback"][:, 0]**2 + 
+            logger["f_feedback"][:, 1]**2 +
+            logger["f_feedback"][:, 2]**2), label="f_feedback_norm")
+        axs[3, 0].plot(self.t_span, np.sqrt(logger["f_feedforward"][:, 0]**2 + 
+            logger["f_feedforward"][:, 1]**2 +
+            logger["f_feedforward"][:, 2]**2), label="f_feedforward_norm")
+        axs[3, 0].plot(self.t_span, np.sqrt(logger["f_disturb_compensation"][:, 0]**2 + 
+            logger["f_disturb_compensation"][:, 1]**2 +
+            logger["f_disturb_compensation"][:, 2]**2), label="f_disturb_compensation_norm")
+        axs[3, 0].legend()
         axs[0, 0].set_ylabel('f_x')
         axs[1, 0].set_ylabel('f_y')
         axs[2, 0].set_ylabel('f_z')
-        axs[0, 0].legend(['f_ctrl_input', "f_d"])
-        axs[0, 1].plot(self.t_span, logger["torque_ctrl_input"][:, 0], marker='x')
-        axs[1, 1].plot(self.t_span, logger["torque_ctrl_input"][:, 1], marker='x')
-        axs[2, 1].plot(self.t_span, logger["torque_ctrl_input"][:, 2], marker='x')
+        axs[3, 0].set_ylabel('f_norm')
+
+        axs[0, 1].plot(self.t_span, logger["torque_ctrl_input"][:, 0], marker='x', label="torque_ctrl_input_x")
+        axs[0, 1].plot(self.t_span, logger["torque_feedback"][:, 0], label="torque_feedback_x")
+        axs[0, 1].plot(self.t_span, logger["torque_coriolis"][:, 0], label="torque_coriolis_x")
+        axs[0, 1].plot(self.t_span, logger["torque_feedforward"][:, 0], label="torque_feedforward_x")
+        axs[1, 1].plot(self.t_span, logger["torque_ctrl_input"][:, 1], marker='x', label="torque_ctrl_input_y")
+        axs[1, 1].plot(self.t_span, logger["torque_feedback"][:, 1], label="torque_feedback_y")
+        axs[1, 1].plot(self.t_span, logger["torque_coriolis"][:, 1], label="torque_coriolis_y")
+        axs[1, 1].plot(self.t_span, logger["torque_feedforward"][:, 1], label="torque_feedforward_y")
+        axs[2, 1].plot(self.t_span, logger["torque_ctrl_input"][:, 2], marker='x', label="torque_ctrl_input_z")
+        axs[2, 1].plot(self.t_span, logger["torque_feedback"][:, 2], label="torque_feedback_z")
+        axs[2, 1].plot(self.t_span, logger["torque_coriolis"][:, 2], label="torque_coriolis_z")
+        axs[2, 1].plot(self.t_span, logger["torque_feedforward"][:, 2], label="torque_feedforward_z")
+        axs[0, 1].legend()
+        axs[1, 1].legend()
+        axs[2, 1].legend()
+        axs[3, 1].plot(self.t_span, np.sqrt(logger["torque_ctrl_input"][:, 0]**2 + 
+            logger["torque_ctrl_input"][:, 1]**2 +
+            logger["torque_ctrl_input"][:, 2]**2), marker='x', label="torque_ctrl_input_norm")
+        axs[3, 1].plot(self.t_span, np.sqrt(logger["torque_feedback"][:, 0]**2 + 
+            logger["torque_feedback"][:, 1]**2 +
+            logger["torque_feedback"][:, 2]**2), label="torque_feedback_norm")
+        axs[3, 1].plot(self.t_span, np.sqrt(logger["torque_coriolis"][:, 0]**2 + 
+            logger["torque_coriolis"][:, 1]**2 +
+            logger["torque_coriolis"][:, 2]**2), label="torque_coriolis_norm")
+        axs[3, 1].plot(self.t_span, np.sqrt(logger["torque_feedforward"][:, 0]**2 + 
+            logger["torque_feedforward"][:, 1]**2 +
+            logger["torque_feedforward"][:, 2]**2), label="torque_feedforward_norm")
+        axs[3, 1].legend()
         axs[0, 1].set_ylabel('M_x')
         axs[1, 1].set_ylabel('M_y')
         axs[2, 1].set_ylabel('M_z')
+        axs[3, 1].set_ylabel('M_norm')
 
     def plot_position_tracking_error(self, logger: np.ndarray):
         fig, axs = plt.subplots(3, 4, sharex=True)
@@ -279,21 +321,12 @@ class Plotter:
         axs[0, 1].plot(self.t_span, logger["f_d_dot"][:, 0], marker='x')
         axs[1, 1].plot(self.t_span, logger["f_d_dot"][:, 1], marker='x')
         axs[2, 1].plot(self.t_span, logger["f_d_dot"][:, 2], marker='x')
-        t_diff, f_d_diff = utils.get_signal_derivative(self.t_span, logger["f_d"], self.dt)
-        axs[0, 1].plot(t_diff, f_d_diff[:, 0], marker='.')
-        axs[1, 1].plot(t_diff, f_d_diff[:, 1], marker='.')
-        axs[2, 1].plot(t_diff, f_d_diff[:, 2], marker='.')
         axs[0, 1].set_ylabel("f_d_dot_x")
         axs[1, 1].set_ylabel("f_d_dot_y")
         axs[2, 1].set_ylabel("f_d_dot_z")
         axs[0, 2].plot(self.t_span, logger["f_d_dot2"][:, 0], marker='x')
         axs[1, 2].plot(self.t_span, logger["f_d_dot2"][:, 1], marker='x')
         axs[2, 2].plot(self.t_span, logger["f_d_dot2"][:, 2], marker='x')
-        t_diff, f_d_dot_diff = utils.get_signal_derivative(
-            self.t_span, logger["f_d_dot"], self.dt)
-        axs[0, 2].plot(t_diff, f_d_dot_diff[:, 0], marker='.')
-        axs[1, 2].plot(t_diff, f_d_dot_diff[:, 1], marker='.')
-        axs[2, 2].plot(t_diff, f_d_dot_diff[:, 2], marker='.')
         axs[0, 2].set_ylabel("f_d_dot2_x")
         axs[1, 2].set_ylabel("f_d_dot2_y")
         axs[2, 2].set_ylabel("f_d_dot2_z")        
@@ -310,11 +343,6 @@ class Plotter:
         axs[0, 1].plot(self.t_span, logger["f_ctrl_input_dot"][:, 0], marker='x')
         axs[1, 1].plot(self.t_span, logger["f_ctrl_input_dot"][:, 1], marker='x')
         axs[2, 1].plot(self.t_span, logger["f_ctrl_input_dot"][:, 2], marker='x')
-        t_diff, f_diff = utils.get_signal_derivative(
-            self.t_span, logger["f_ctrl_input"], self.dt)
-        axs[0, 1].plot(t_diff, f_diff[:, 0], marker='.')
-        axs[1, 1].plot(t_diff, f_diff[:, 1], marker='.')
-        axs[2, 1].plot(t_diff, f_diff[:, 2], marker='.')
         axs[0, 1].set_ylabel("f_dot_x")
         axs[1, 1].set_ylabel("f_dot_y")
         axs[2, 1].set_ylabel("f_dot_z")        
@@ -322,95 +350,135 @@ class Plotter:
     def plot_pose_desired(self, logger: np.ndarray):
         fig1, axs1 = plt.subplots(3, 9, sharex=True)
         fig1.suptitle('pose_desired, pose_desired_dot, pose_desired_dot2')
-        axs1[0, 0].plot(self.t_span, logger["pose_desired"][:, 0, 0], marker='x')
-        axs1[1, 0].plot(self.t_span, logger["pose_desired"][:, 1, 0], marker='x')
-        axs1[2, 0].plot(self.t_span, logger["pose_desired"][:, 2, 0], marker='x')
-        axs1[0, 1].plot(self.t_span, logger["pose_desired"][:, 0, 1], marker='x')
-        axs1[1, 1].plot(self.t_span, logger["pose_desired"][:, 1, 1], marker='x')
-        axs1[2, 1].plot(self.t_span, logger["pose_desired"][:, 2, 1], marker='x')
-        axs1[0, 2].plot(self.t_span, logger["pose_desired"][:, 0, 2], marker='x')
-        axs1[1, 2].plot(self.t_span, logger["pose_desired"][:, 1, 2], marker='x')
-        axs1[2, 2].plot(self.t_span, logger["pose_desired"][:, 2, 2], marker='x')
-        axs1[0, 3].plot(self.t_span, logger["pose_desired_dot"][:, 0, 0], marker='x')
-        axs1[1, 3].plot(self.t_span, logger["pose_desired_dot"][:, 1, 0], marker='x')
-        axs1[2, 3].plot(self.t_span, logger["pose_desired_dot"][:, 2, 0], marker='x')
-        axs1[0, 4].plot(self.t_span, logger["pose_desired_dot"][:, 0, 1], marker='x')
-        axs1[1, 4].plot(self.t_span, logger["pose_desired_dot"][:, 1, 1], marker='x')
-        axs1[2, 4].plot(self.t_span, logger["pose_desired_dot"][:, 2, 1], marker='x')
-        axs1[0, 5].plot(self.t_span, logger["pose_desired_dot"][:, 0, 2], marker='x')
-        axs1[1, 5].plot(self.t_span, logger["pose_desired_dot"][:, 1, 2], marker='x')
-        axs1[2, 5].plot(self.t_span, logger["pose_desired_dot"][:, 2, 2], marker='x')
-        t_diff, pose_desired_diff = utils.get_signal_derivative(
-            self.t_span, logger["pose_desired"], self.dt)
-        axs1[0, 3].plot(t_diff, pose_desired_diff[:, 0, 0], marker='.')
-        axs1[1, 3].plot(t_diff, pose_desired_diff[:, 1, 0], marker='.')
-        axs1[2, 3].plot(t_diff, pose_desired_diff[:, 2, 0], marker='.')
-        axs1[0, 4].plot(t_diff, pose_desired_diff[:, 0, 1], marker='.')
-        axs1[1, 4].plot(t_diff, pose_desired_diff[:, 1, 1], marker='.')
-        axs1[2, 4].plot(t_diff, pose_desired_diff[:, 2, 1], marker='.')
-        axs1[0, 5].plot(t_diff, pose_desired_diff[:, 0, 2], marker='.')
-        axs1[1, 5].plot(t_diff, pose_desired_diff[:, 1, 2], marker='.')
-        axs1[2, 5].plot(t_diff, pose_desired_diff[:, 2, 2], marker='.')
+        axs1[0, 0].plot(self.t_span, logger["pose_desired"][:, 0, 0], marker='x', label="pose_desired[0, 0]")
+        axs1[1, 0].plot(self.t_span, logger["pose_desired"][:, 1, 0], marker='x', label="pose_desired[1, 0]")
+        axs1[2, 0].plot(self.t_span, logger["pose_desired"][:, 2, 0], marker='x', label="pose_desired[2, 0]")
+        axs1[0, 1].plot(self.t_span, logger["pose_desired"][:, 0, 1], marker='x', label="pose_desired[0, 1]")
+        axs1[1, 1].plot(self.t_span, logger["pose_desired"][:, 1, 1], marker='x', label="pose_desired[1, 1]")
+        axs1[2, 1].plot(self.t_span, logger["pose_desired"][:, 2, 1], marker='x', label="pose_desired[2, 1]")
+        axs1[0, 2].plot(self.t_span, logger["pose_desired"][:, 0, 2], marker='x', label="pose_desired[0, 2]")
+        axs1[1, 2].plot(self.t_span, logger["pose_desired"][:, 1, 2], marker='x', label="pose_desired[1, 2]")
+        axs1[2, 2].plot(self.t_span, logger["pose_desired"][:, 2, 2], marker='x', label="pose_desired[2, 2]")
+        axs1[0, 0].plot(self.t_span, logger["pose"][:, 0, 0], label="pose[0, 0]")
+        axs1[1, 0].plot(self.t_span, logger["pose"][:, 1, 0], label="pose[1, 0]")
+        axs1[2, 0].plot(self.t_span, logger["pose"][:, 2, 0], label="pose[2, 0]")
+        axs1[0, 1].plot(self.t_span, logger["pose"][:, 0, 1], label="pose[0, 1]")
+        axs1[1, 1].plot(self.t_span, logger["pose"][:, 1, 1], label="pose[1, 1]")
+        axs1[2, 1].plot(self.t_span, logger["pose"][:, 2, 1], label="pose[2, 1]")
+        axs1[0, 2].plot(self.t_span, logger["pose"][:, 0, 2], label="pose[0, 2]")
+        axs1[1, 2].plot(self.t_span, logger["pose"][:, 1, 2], label="pose[1, 2]")
+        axs1[2, 2].plot(self.t_span, logger["pose"][:, 2, 2], label="pose[2, 2]")
+        axs1[0, 0].legend()
+        axs1[1, 0].legend()
+        axs1[2, 0].legend()
+        axs1[0, 1].legend()
+        axs1[1, 1].legend()
+        axs1[2, 1].legend()
+        axs1[0, 2].legend()
+        axs1[1, 2].legend()
+        axs1[2, 2].legend()
+        for i in range(3):
+            for j in range(3):
+                axs1[i, j].set_ylim(-1, 1)
+        
+        axs1[0, 3].plot(self.t_span, logger["pose_desired_dot"][:, 0, 0], marker='x', label="pose_desired_dot[0, 0]")
+        axs1[1, 3].plot(self.t_span, logger["pose_desired_dot"][:, 1, 0], marker='x', label="pose_desired_dot[1, 0]")
+        axs1[2, 3].plot(self.t_span, logger["pose_desired_dot"][:, 2, 0], marker='x', label="pose_desired_dot[2, 0]")
+        axs1[0, 4].plot(self.t_span, logger["pose_desired_dot"][:, 0, 1], marker='x', label="pose_desired_dot[0, 1]")
+        axs1[1, 4].plot(self.t_span, logger["pose_desired_dot"][:, 1, 1], marker='x', label="pose_desired_dot[1, 1]")
+        axs1[2, 4].plot(self.t_span, logger["pose_desired_dot"][:, 2, 1], marker='x', label="pose_desired_dot[2, 1]")
+        axs1[0, 5].plot(self.t_span, logger["pose_desired_dot"][:, 0, 2], marker='x', label="pose_desired_dot[0, 2]")
+        axs1[1, 5].plot(self.t_span, logger["pose_desired_dot"][:, 1, 2], marker='x', label="pose_desired_dot[1, 2]")
+        axs1[2, 5].plot(self.t_span, logger["pose_desired_dot"][:, 2, 2], marker='x', label="pose_desired_dot[2, 2]")
+        axs1[0, 3].plot(self.t_span, logger["pose_dot"][:, 0, 0], label="pose_dot[0, 0]")
+        axs1[1, 3].plot(self.t_span, logger["pose_dot"][:, 1, 0], label="pose_dot[1, 0]")
+        axs1[2, 3].plot(self.t_span, logger["pose_dot"][:, 2, 0], label="pose_dot[2, 0]")
+        axs1[0, 4].plot(self.t_span, logger["pose_dot"][:, 0, 1], label="pose_dot[0, 1]")
+        axs1[1, 4].plot(self.t_span, logger["pose_dot"][:, 1, 1], label="pose_dot[1, 1]")
+        axs1[2, 4].plot(self.t_span, logger["pose_dot"][:, 2, 1], label="pose_dot[2, 1]")
+        axs1[0, 5].plot(self.t_span, logger["pose_dot"][:, 0, 2], label="pose_dot[0, 2]")
+        axs1[1, 5].plot(self.t_span, logger["pose_dot"][:, 1, 2], label="pose_dot[1, 2]")
+        axs1[2, 5].plot(self.t_span, logger["pose_dot"][:, 2, 2], label="pose_dot[2, 2]")
+        axs1[0, 3].legend()
+        axs1[1, 3].legend()
+        axs1[2, 3].legend()
+        axs1[0, 4].legend()
+        axs1[1, 4].legend()
+        axs1[2, 4].legend()
+        axs1[0, 5].legend()
+        axs1[1, 5].legend()
+        axs1[2, 5].legend()
 
-        axs1[0, 6].plot(self.t_span, logger["pose_desired_dot2"][:, 0, 0], marker='x')
-        axs1[1, 6].plot(self.t_span, logger["pose_desired_dot2"][:, 1, 0], marker='x')
-        axs1[2, 6].plot(self.t_span, logger["pose_desired_dot2"][:, 2, 0], marker='x')
-        axs1[0, 7].plot(self.t_span, logger["pose_desired_dot2"][:, 0, 1], marker='x')
-        axs1[1, 7].plot(self.t_span, logger["pose_desired_dot2"][:, 1, 1], marker='x')
-        axs1[2, 7].plot(self.t_span, logger["pose_desired_dot2"][:, 2, 1], marker='x')
-        axs1[0, 8].plot(self.t_span, logger["pose_desired_dot2"][:, 0, 2], marker='x')
-        axs1[1, 8].plot(self.t_span, logger["pose_desired_dot2"][:, 1, 2], marker='x')
-        axs1[2, 8].plot(self.t_span, logger["pose_desired_dot2"][:, 2, 2], marker='x')
-        t_diff, pose_desired_dot_diff = utils.get_signal_derivative(
-            self.t_span, logger["pose_desired_dot"], self.dt)
-        axs1[0, 6].plot(t_diff, pose_desired_dot_diff[:, 0, 0], marker='.')
-        axs1[1, 6].plot(t_diff, pose_desired_dot_diff[:, 1, 0], marker='.')
-        axs1[2, 6].plot(t_diff, pose_desired_dot_diff[:, 2, 0], marker='.')
-        axs1[0, 7].plot(t_diff, pose_desired_dot_diff[:, 0, 1], marker='.')
-        axs1[1, 7].plot(t_diff, pose_desired_dot_diff[:, 1, 1], marker='.')
-        axs1[2, 7].plot(t_diff, pose_desired_dot_diff[:, 2, 1], marker='.')
-        axs1[0, 8].plot(t_diff, pose_desired_dot_diff[:, 0, 2], marker='.')
-        axs1[1, 8].plot(t_diff, pose_desired_dot_diff[:, 1, 2], marker='.')
-        axs1[2, 8].plot(t_diff, pose_desired_dot_diff[:, 2, 2], marker='.')
+        axs1[0, 6].plot(self.t_span, logger["pose_desired_dot2"][:, 0, 0], marker='x', label="pose_desired_dot2[0, 0]")
+        axs1[1, 6].plot(self.t_span, logger["pose_desired_dot2"][:, 1, 0], marker='x', label="pose_desired_dot2[1, 0]")
+        axs1[2, 6].plot(self.t_span, logger["pose_desired_dot2"][:, 2, 0], marker='x', label="pose_desired_dot2[2, 0]")
+        axs1[0, 7].plot(self.t_span, logger["pose_desired_dot2"][:, 0, 1], marker='x', label="pose_desired_dot2[0, 1]")
+        axs1[1, 7].plot(self.t_span, logger["pose_desired_dot2"][:, 1, 1], marker='x', label="pose_desired_dot2[1, 1]")
+        axs1[2, 7].plot(self.t_span, logger["pose_desired_dot2"][:, 2, 1], marker='x', label="pose_desired_dot2[2, 1]")
+        axs1[0, 8].plot(self.t_span, logger["pose_desired_dot2"][:, 0, 2], marker='x', label="pose_desired_dot2[0, 2]")
+        axs1[1, 8].plot(self.t_span, logger["pose_desired_dot2"][:, 1, 2], marker='x', label="pose_desired_dot2[1, 2]")
+        axs1[2, 8].plot(self.t_span, logger["pose_desired_dot2"][:, 2, 2], marker='x', label="pose_desired_dot2[2, 2]")
 
     def plot_disturbance_force(self, logger: np.ndarray):
         fig, axs = plt.subplots(4, 2, sharex=True)
         fig.suptitle('disturbance')
         f_norm = np.sqrt(
-            logger["f_disturb"][:, 0]**2 + logger["f_disturb"][:, 1]**2 + logger["f_disturb"][:, 2]**2)
+            logger["f_disturb"][:, 0]**2 +
+            logger["f_disturb"][:, 1]**2 +
+            logger["f_disturb"][:, 2]**2
+        )
         f_est_norm = np.sqrt(
-            logger["f_disturb_est"][:, 0]**2 + logger["f_disturb_est"][:, 1]**2 + logger["f_disturb_est"][:, 2]**2)
+            logger["f_disturb_est"][:, 0]**2 +
+            logger["f_disturb_est"][:, 1]**2 +
+            logger["f_disturb_est"][:, 2]**2
+        )
         f_base_norm = np.sqrt(
-            logger["f_disturb_est_base"][:, 0]**2 + logger["f_disturb_est_base"][:, 1]**2 + logger["f_disturb_est_base"][:, 2]**2)
+            logger["f_disturb_est_base"][:, 0]**2 +
+            logger["f_disturb_est_base"][:, 1]**2 +
+            logger["f_disturb_est_base"][:, 2]**2
+        )
         torque_norm = np.sqrt(
-            logger["torque_disturb"][:, 0]**2 + logger["torque_disturb"][:, 1]**2 + logger["torque_disturb"][:, 2]**2)
+            logger["torque_disturb"][:, 0]**2 +
+            logger["torque_disturb"][:, 1]**2 +
+            logger["torque_disturb"][:, 2]**2
+        )
         torque_est_norm = np.sqrt(
-            logger["torque_disturb_est"][:, 0]**2 + logger["torque_disturb_est"][:, 1]**2 + logger["torque_disturb_est"][:, 2]**2)
+            logger["torque_disturb_est"][:, 0]**2 +
+            logger["torque_disturb_est"][:, 1]**2 +
+            logger["torque_disturb_est"][:, 2]**2
+        )
         torque_base_norm = np.sqrt(
-            logger["torque_disturb_est_base"][:, 0]**2 + logger["torque_disturb_est_base"][:, 1]**2 + logger["torque_disturb_est_base"][:, 2]**2)
+            logger["torque_disturb_est_base"][:, 0]**2 +
+            logger["torque_disturb_est_base"][:, 1]**2 +
+            logger["torque_disturb_est_base"][:, 2]**2
+        )
         
-        axs[0, 0].plot(self.t_span, logger["f_disturb"][:, 0], marker='.')
-        axs[0, 0].plot(self.t_span, logger["f_disturb_est"][:, 0], marker='.')
-        axs[0, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 0], marker='.')
+        axs[0, 0].plot(self.t_span, logger["f_disturb"][:, 0], marker='.', markersize=9, linewidth=1.5, label='f_disturb')
+        axs[0, 0].plot(self.t_span, logger["f_disturb_est"][:, 0], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
+        axs[0, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 0], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
+        axs[0, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 0], marker='.', markersize=5, linewidth=0.3, label='f_disturb_sensed_raw')
         axs[0, 0].set_ylabel("f_x")
-        axs[0, 0].legend(['f_disturb', 'f_disturb_est', 'f_disturb_est_base'])
+        axs[0, 0].legend()
         
-        axs[1, 0].plot(self.t_span, logger["f_disturb"][:, 1], marker='.')
-        axs[1, 0].plot(self.t_span, logger["f_disturb_est"][:, 1], marker='.')
-        axs[1, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 1], marker='.')
+        axs[1, 0].plot(self.t_span, logger["f_disturb"][:, 1], marker='.', markersize=9, linewidth=1.5, label='f_disturb')
+        axs[1, 0].plot(self.t_span, logger["f_disturb_est"][:, 1], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
+        axs[1, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
+        axs[1, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_sensed_raw')
         axs[1, 0].set_ylabel("f_y")
-        axs[1, 0].legend(['f_disturb', 'f_disturb_est', 'f_disturb_est_base'])
+        axs[1, 0].legend()
         
-        axs[2, 0].plot(self.t_span, logger["f_disturb"][:, 2], marker='.')
-        axs[2, 0].plot(self.t_span, logger["f_disturb_est"][:, 2], marker='.')
-        axs[2, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 2], marker='.')
+        axs[2, 0].plot(self.t_span, logger["f_disturb"][:, 2], marker='.', markersize=9, linewidth=1.5, label='f_disturb')
+        axs[2, 0].plot(self.t_span, logger["f_disturb_est"][:, 2], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
+        axs[2, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
+        axs[2, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_sensed_raw')
         axs[2, 0].set_ylabel("f_z")
-        axs[2, 0].legend(['f_disturb', 'f_disturb_est', 'f_disturb_est_base'])
+        axs[2, 0].legend()
         
-        axs[3, 0].plot(self.t_span, f_norm, marker='.')
-        axs[3, 0].plot(self.t_span, f_est_norm, marker='.')
-        axs[3, 0].plot(self.t_span, f_base_norm, marker='.')
+        axs[3, 0].plot(self.t_span, f_norm, marker='.', markersize=9, linewidth=1.5, label='f_norm')
+        axs[3, 0].plot(self.t_span, f_est_norm, marker='.', markersize=7, linewidth=1, label='f_est_norm')
+        axs[3, 0].plot(self.t_span, f_base_norm, marker='.', markersize=5, linewidth=0.5, label='f_base_norm')
         axs[3, 0].set_ylabel("f_norm")
+        axs[3, 0].legend()
         
         axs[0, 1].plot(self.t_span, logger["torque_disturb"][:, 0], marker='.')
         axs[0, 1].plot(self.t_span, logger["torque_disturb_est"][:, 0], marker='.')
@@ -433,18 +501,75 @@ class Plotter:
         axs[3, 1].set_ylabel("torque_norm")
 
     def plot_rotor(self, logger: np.ndarray):
-        fig, axs = plt.subplots(5, 1, sharex=True)
-        fig.suptitle('rotor force, rotor speed')
-        axs[0].plot(self.t_span, logger["f_motor"][:, 0], marker='x')
-        axs[1].plot(self.t_span, logger["f_motor"][:, 1], marker='x')
-        axs[2].plot(self.t_span, logger["f_motor"][:, 2], marker='x')
-        axs[3].plot(self.t_span, logger["f_motor"][:, 3], marker='x')
-        axs[0].set_ylabel("f_motor_0")
-        axs[1].set_ylabel("f_motor_1")
-        axs[2].set_ylabel("f_motor_2")
-        axs[3].set_ylabel("f_motor_3")
-        axs[4].plot(self.t_span, logger["rotor_spd"])
-        axs[4].set_ylabel("rotor_spd [RPM]")
+        # fig, axs = plt.subplots(2, 1, sharex=True)
+        # fig.suptitle('rotor force, rotor speed')
+        # axs[0].plot(self.t_span, logger["f_motor"][:, 0], label="Rotor 0 Force")
+        # axs[0].plot(self.t_span, logger["f_motor"][:, 1], label="Rotor 1 Force")
+        # axs[0].plot(self.t_span, logger["f_motor"][:, 2], label="Rotor 2 Force")
+        # axs[0].plot(self.t_span, logger["f_motor"][:, 3], label="Rotor 3 Force")
+        # axs[0].set_ylabel("Rotor Forces")
+        # axs[0].legend()
+        # axs[1].plot(self.t_span, logger["rotor_0_rotation_spd"], label="Rotor 0 Speed")
+        # axs[1].plot(self.t_span, logger["rotor_1_rotation_spd"], label="Rotor 1 Speed")
+        # axs[1].plot(self.t_span, logger["rotor_2_rotation_spd"], label="Rotor 2 Speed")
+        # axs[1].plot(self.t_span, logger["rotor_3_rotation_spd"], label="Rotor 3 Speed")
+        # axs[1].plot(self.t_span, logger["rotor_0_rotation_spd_delayed"], label="Rotor 0 Speed delayed")
+        # axs[1].plot(self.t_span, logger["rotor_1_rotation_spd_delayed"], label="Rotor 1 Speed delayed")
+        # axs[1].plot(self.t_span, logger["rotor_2_rotation_spd_delayed"], label="Rotor 2 Speed delayed")
+        # axs[1].plot(self.t_span, logger["rotor_3_rotation_spd_delayed"], label="Rotor 3 Speed delayed")
+        # axs[1].set_ylabel("rotor_spd [RPM]")
+        # axs[1].legend()
+        fig, axs = plt.subplots(2, 1, sharex=True, figsize=(10, 6))
+        fig.suptitle('Rotor Force & Rotor Speed')
+
+        # === Rotor Force Plot ===
+        force_colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
+        line_width_base = 1.5
+        line_width_gap = 0.8
+        force_line_width = [line_width_base + (4-i) * line_width_gap for i in range(4)]
+        for i in range(4):
+            axs[0].plot(
+                self.t_span, 
+                logger["f_motor"][:, i], 
+                label=f"Rotor {i} Force", 
+                linestyle='-', 
+                linewidth=force_line_width[i], 
+                color=force_colors[i], 
+                zorder=3+i  # ensure later lines go on top
+            )
+        axs[0].set_ylabel("Rotor Forces")
+        axs[0].legend(loc='upper right')
+
+        # === Rotor Speed Plot ===
+        speed_colors = force_colors
+        speed_line_width = force_line_width
+        delay_styles = ['--', '--', '--', '--']  # dashed for delayed
+        for i in range(4):
+            axs[1].plot(
+                self.t_span, 
+                logger[f"rotor_{i}_rotation_spd"], 
+                label=f"Rotor {i} Speed", 
+                color=speed_colors[i], 
+                linestyle='-', 
+                linewidth=speed_line_width[i], 
+                zorder=2*i
+            )
+            axs[1].plot(
+                self.t_span, 
+                logger[f"rotor_{i}_rotation_spd_delayed"], 
+                label=f"Rotor {i} Speed delayed", 
+                color=speed_colors[i], 
+                linestyle=delay_styles[i], 
+                linewidth=speed_line_width[i], 
+                zorder=2*i + 1
+            )
+        axs[1].set_ylabel("Rotor Speed [RPM]")
+        axs[1].legend(loc='upper right')
+
+        # Optional: Grid and layout
+        for ax in axs:
+            ax.grid(True)
+        fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     def plot_omega_desired(self, logger: np.ndarray):
         fig, axs = plt.subplots(3, 1, sharex=True)
@@ -500,6 +625,36 @@ class Plotter:
         axs9.invert_zaxis()
         axs9.invert_yaxis()
 
+    def plot_pose_in_given_time(self, logger: np.ndarray, t: float):
+        idx = int(t/self.dt)
+        idx = np.clip(idx, 0, len(self.t_span)-1)
+        fig9, axs9 = plt.subplots(1, 1, sharex=True)
+        axs9 = fig9.add_subplot(111, projection='3d')
+        b1b2, b3 = plot_utils.generate_drone_profile(
+            np.zeros(3), logger["pose"][idx, :, :])
+        axs9.plot3D(b1b2[:, 0],
+                b1b2[:, 1],
+                b1b2[:, 2], 'red', label='Pose')
+        axs9.plot3D(b3[:, 0],
+                b3[:, 1],
+                b3[:, 2], 'red')
+        b1b2, b3 = plot_utils.generate_drone_profile(
+            np.zeros(3), logger["pose_desired"][idx, :, :])
+        axs9.plot3D(b1b2[:, 0],
+                b1b2[:, 1],
+                b1b2[:, 2], 'orange', label='Pose Desired')
+        axs9.plot3D(b3[:, 0],
+                b3[:, 1],
+                b3[:, 2], 'orange')
+        axs9.set_title('3D Plot')
+        axs9.set_xlabel('X')
+        axs9.set_ylabel('Y')
+        axs9.set_zlabel('Z')
+        axs9.axis('equal')
+        axs9.invert_zaxis()
+        axs9.invert_yaxis()
+        axs9.legend()
+        
     def animate_pose(self, logger: np.ndarray):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')

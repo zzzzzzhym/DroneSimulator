@@ -9,7 +9,7 @@ class FlowPassFlatPlate:
         of the flow pass a plate problem, and convert the solution back to the original
         problem.
         """
-        def __init__(self, wall_normal: np.ndarray, wall_origin: np.ndarray, wall_length: float):
+        def __init__(self, wall_normal: np.ndarray, wall_infinity_direction: np.ndarray, wall_origin: np.ndarray, wall_length: float):
             """
             Initialize the Converter class.
 
@@ -21,12 +21,24 @@ class FlowPassFlatPlate:
             self.wall_origin = wall_origin
             self.wall_length = wall_length
             self.wall_normal = wall_normal
+            self.wall_infinity_direction = FlowPassFlatPlate.Interface.correct_wall_infinity_direction(wall_normal, wall_infinity_direction)
             self.model = FlowPassFlatPlate.CoreFormulation(a=wall_length/4)
             self.transformation_matrix_inertial_to_model = None
             self.transformation_matrix_model_to_inertial = None
             self.u_free = None
             self.is_wind_constant_direction_set = False
         
+        @staticmethod
+        def correct_wall_infinity_direction(wall_normal: np.ndarray, wall_infinity_direction: np.ndarray):
+            """correct the wall_infinity_direction to be in the same plane as wall_normal
+            """
+            wall_infinity_direction = wall_infinity_direction - np.dot(wall_infinity_direction, wall_normal) * wall_normal
+            wall_infinity_direction_norm = np.linalg.norm(wall_infinity_direction)
+            if wall_infinity_direction_norm < 1e-6:
+                raise ValueError("The wall infinity direction is too close to wall normal")
+            else:
+                return wall_infinity_direction / wall_infinity_direction_norm
+
         def set_constant_wind(self, u_free: np.ndarray):
             """Compute transformation matrices before solution to save computation time"""
             self.transformation_matrix_inertial_to_model, self.transformation_matrix_model_to_inertial = self.get_rotation_matrix_between_inertial_and_model_frame(u_free)
@@ -45,7 +57,7 @@ class FlowPassFlatPlate:
             u_free_in_model = FlowPassFlatPlate.Interface.convert_u_free_to_model_frame(u_free, transformation_matrix_inertial_to_model)
             u_free_norm, alpha = FlowPassFlatPlate.Interface.get_model_input(u_free_in_model)
             u_in_model, v_in_model = self.model.get_velocity(u_free_norm, alpha, location_in_model[0], location_in_model[1])
-            velocity_in_inertial = self.convert_velocity_to_inertial_frame(np.array([u_in_model, v_in_model, 0]), transformation_matrix_model_to_inertial)
+            velocity_in_inertial = self.convert_velocity_to_inertial_frame(np.array([u_in_model, v_in_model, u_free_in_model[2]]), transformation_matrix_model_to_inertial)
             return velocity_in_inertial
 
         def convert_wall_location_to_model_frame(self, location_original: np.ndarray, transformation_matrix_inertial_to_model):
@@ -80,7 +92,7 @@ class FlowPassFlatPlate:
             Returns:
                 float: Attack angle in [rad].
             """
-            u_free_norm = np.linalg.norm(u_free_in_model)
+            u_free_norm = np.linalg.norm(u_free_in_model[:2])
             if u_free_norm < 1e-3:
                 alpha = 0
             else:
@@ -93,15 +105,7 @@ class FlowPassFlatPlate:
             Assume the wall is vertical, and wind is horizontal in inertial frame
             """
             y_axis = -self.wall_normal
-            z_axis = np.cross(u_free, y_axis)
-            z_axis_norm = np.linalg.norm(z_axis)
-            if z_axis_norm < 1e-6:  # either u_free is too small or perpendicular to the wall (along y-axis)
-                if np.abs(y_axis[0]) < 1e-3 and np.abs(y_axis[1]) < 1e-3:   # the overlapped axis is near z-axis
-                    z_axis = np.array([1, 0, 0])    # choose x-axis as the new z-axis (any axis in x-y plane is fine)
-                else:
-                    z_axis = np.array([-y_axis[1], y_axis[0], 0])
-            else:
-                z_axis = z_axis / z_axis_norm
+            z_axis = self.wall_infinity_direction
             x_axis = np.cross(y_axis, z_axis)
             transformation_matrix_inertial_to_model = np.array([x_axis, y_axis, z_axis])
             transformation_matrix_model_to_inertial = transformation_matrix_inertial_to_model.T
@@ -184,7 +188,7 @@ class FlowPassFlatPlate:
             elif np.abs(z2) > self.c:
                 z = z2
             else:
-                warnings.warn("Invalid z: expecting |z| > c")
+                warnings.warn("Invalid z: expecting |z| > c. Possibly inquiring a point on the plate.")
                 return 0, 0
             dWdz = (U * np.exp(-1j * alpha) - U * np.exp(1j * alpha) * self.a**2 / z**2) / (1 - self.a**2 / z**2)
             u = np.real(dWdz)

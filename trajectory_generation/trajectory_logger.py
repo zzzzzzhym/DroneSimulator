@@ -32,7 +32,7 @@ def write_trajectory(trajectory: trajectory_generator.TrajectoryGenerator, file_
     else:
         with open(file_path, 'wb') as file:
             pickle.dump(trajectory.__dict__, file)
-        print("Trajectory data is written into:\n" + file_path)
+        print("Trajectory data is written into:\n" + os.path.relpath(file_path))
 
 def read_trajectory(file_name: str):
     map_path = traj_gen_utils.get_dir_from_traj_gen(["data", "map", file_name])
@@ -59,16 +59,13 @@ def make_random_trajectories(num_of_traj: int):
 
 def get_valid_path_to_write(prefix, suffix, num, file_dir):
     j = num
-    file_name = prefix + str(j) + suffix
-    file_path = traj_gen_utils.get_dir_from_traj_gen([file_dir, file_name])
-    if j > 100000:
-        raise ValueError("Map data file index too large: " + str(j))
-    if os.path.exists(file_path):
+    while j <= 100000:
+        file_name = prefix + str(j) + suffix
+        file_path = traj_gen_utils.get_dir_from_traj_gen([file_dir, file_name])
+        if not os.path.exists(file_path):
+            return file_path
         j += 1
-        result = get_valid_path_to_write(prefix, suffix, j, file_dir) 
-    else:
-        result = file_path
-    return result
+    raise ValueError(f"Map data file index too large: {j}")
 
 def pick_a_trajectory(file_id: int=None):
     map_dir = traj_gen_utils.get_dir_from_traj_gen(["data", "map"])

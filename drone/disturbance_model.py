@@ -58,7 +58,7 @@ class DisturbanceForce:
         Returns:
             tuple of np.ndarray: (3,) array to represent (f_x, f_y, f_z) and (3,) array to represent (t_x, t_y, t_z)
         """
-        raise NotImplementedError("This function need to be implemented by subclasses")
+        return np.zeros(3), np.zeros(3)    
 
 def const_force(weight):
     # typical payload of a drone ranges from 0.2kg to 1kg
@@ -80,26 +80,26 @@ class AirDrag(DisturbanceForce):
     def __init__(self) -> None:
         super().__init__()
 
-    def update_explicit_wrench(self, t: float=0.0, state: dynamics_state.State=None) -> None:
-        self.f_explicit = self.get_air_drag(state.v)
+    def update_explicit_wrench(self, t: float=0.0, v: np.ndarray=0.0) -> None:
+        self.f_explicit = self.get_air_drag(v)
         self.t_explicit = np.zeros(3)
 
     def get_implicit_wrench_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
         return np.zeros(3), np.zeros(3)
     
     @staticmethod
-    def get_air_drag(v: np.ndarray) -> np.ndarray:
+    def get_air_drag(v_wind: np.ndarray) -> np.ndarray:
         """air drag force in inertial frame
         f = 0.5*c_d*area*v_norm^2*(v/v_norm)
 
         Args:
-            v (np.ndarray): speed np.array([vx, vy, vz])
+            v_wind (np.ndarray): speed np.array([vx, vy, vz])
 
         Returns:
             np.ndarray: (3,) array to represent (f_x, f_y, f_z)
         """
 
-        f = 0.5*params.c_d*params.area_frontal*np.sqrt(v[0]**2+v[1]**2+v[2]**2)*v
+        f = 0.5*params.c_d*params.area_frontal*np.sqrt(v_wind[0]**2+v_wind[1]**2+v_wind[2]**2)*v_wind
         return f
 
 class WallEffect(DisturbanceForce):
@@ -159,18 +159,22 @@ class WallEffect(DisturbanceForce):
         t = self.get_c_q(d)*0.5*params.Environment.rho_air*rotor_spd**2*self.propeller.diameter**5
         self.t_explicit = t*np.array([0, 1, 0])
     
-    def get_implicit_wrench_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
-        return np.zeros(3), np.zeros(3)
     
 
 class WindEffectNearWall(DisturbanceForce):
     """This model integrates flow pass a vertical wall and the inflow model of propeller. It simulates wind velocity field around a wall and its impact on drone rotors.
     """
-    def __init__(self, wall_origin=np.array([-0.5, 0, 0]), wall_norm=np.array([1, 0, 0]), wall_length=4.0) -> None:
+    def __init__(self, wall_origin=np.array([-0.5, 0, 0]), wall_norm=np.array([1, 0, 0]), wall_length=4.0, u_free=np.array([-5.0, 0.0, 0.0])) -> None:
         super().__init__()
-        self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6")
-        self.wind_field_model = flow_pass_flat_plate.FlowPassFlatPlate.Interface(wall_norm, wall_origin, wall_length)
-        self.u_free = np.array([-5.0, 0.0, 0.0])    # in FLU inertial frame
+        self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6_with_trail")
+        self.wind_field_model = flow_pass_flat_plate.FlowPassFlatPlate.Interface(wall_norm, np.array([0.0, 0.0, 1.0]), wall_origin, wall_length)
+        self.u_free_const = u_free    # in FLU inertial frame
+        self.v_i_average = np.zeros(3)  # average downwash in FLU inertial frame
+        self.u_free = self.u_free_const.copy()
+        self.delayed_rotor_set_speed = None
+        
+    def generate_sinusoidal_wind(self, t: float) -> None:
+        self.u_free[0] = self.u_free_const[0] + 5.0*np.sin(t) # Neural Fly test condition
 
     def update_explicit_wrench(self, t: float, state: dynamics_state.State, rotor_set: rotor.RotorSet, force_control, torque_control) -> None:
         """WARNING: To be tested
@@ -178,17 +182,24 @@ class WindEffectNearWall(DisturbanceForce):
         Args:
             rotors (_type_): _description_
         """
+        # self.generate_sinusoidal_wind(t)
         forces = []
         torques = []
-        for rotor in rotor_set.rotors:
-            wind_velocity = self.wind_field_model.get_solution(self.u_free, rotor.position_inertial_frame)
-            force = self.propeller_force_table.get_rotor_forces(wind_velocity, rotor.velocity_inertial_frame, rotor.pose, rotor.rotation_speed, rotor.is_ccw_blade)
+        induced_flows = []
+        self.step_delayed_rotation_speed(rotor_set)
+        for rotor, delayed_rotor_speed in zip(rotor_set.rotors, self.delayed_rotor_set_speed):
+            u_horizontal = self.u_free*np.array([1, 1, 0])  # horizontal wind velocity
+            wind_velocity = self.wind_field_model.get_solution(u_horizontal, rotor.position_inertial_frame)  # in FLU inertial frame
+            wind_velocity[2] = self.u_free[2]  # set the vertical wind velocity to be the same as the free stream velocity
+            force, v_i = self.propeller_force_table.get_rotor_forces(wind_velocity, rotor.velocity_inertial_frame, rotor.pose, delayed_rotor_speed, rotor.is_ccw_blade)
             forces.append(force)
             torques.append(np.cross(rotor.relative_position_inertial_frame, force))
+            induced_flows.append(v_i)
+            rotor.local_wind_velocity = wind_velocity  # update the local wind velocity in rotor frame
         self.f_explicit = sum(forces)
         self.t_explicit = sum(torques)
-        self.f_explicit = utils.FrdFluConverter.flip(self.f_explicit)
-        self.t_explicit = utils.FrdFluConverter.flip(self.t_explicit)
+        self.f_explicit = utils.FrdFluConverter.flip_vector(self.f_explicit)
+        self.t_explicit = utils.FrdFluConverter.flip_vector(self.t_explicit)
         self.f_explicit = state.pose.T@self.f_explicit  # convert to body frame
         self.t_explicit = state.pose.T@self.t_explicit  # convert to body frame
         self.f_explicit = self.f_explicit - (-force_control)   # only the difference is considered as disturbance. postive force_control in negative z axis
@@ -198,10 +209,53 @@ class WindEffectNearWall(DisturbanceForce):
         # if np.linalg.norm(self.f_explicit) > 10 and t > 0.5:
         #     print(f"Wind effect: {self.f_explicit}")
         self.t_explicit[2] = 0.0    # the inflow model did not model torque in z axis
-        
+        self.v_i_average = sum(induced_flows) / len(induced_flows)
+        self.f_explicit += self.get_disturbance_on_drone_body(state)  # add the air drag force on the drone body to the propeller force
+        # self.blend_white_noise()  # add white noise to the force and torque
 
-    def get_implicit_wrench_derivatives(self, t: float=0.0, state: np.ndarray=np.zeros(13)) -> np.ndarray:
-        return np.zeros(3), np.zeros(3)
+    def blend_white_noise(self):
+        """Blend the white noise to the force and torque
+        """
+        f_noise_std = np.abs(self.f_explicit)*0.2
+        tq_noise_std = np.array([0.001, 0.001, 0.001])
+        f_noise = np.random.normal(0, f_noise_std)
+        tq_noise = np.random.normal(0, tq_noise_std)  
+        self.f_explicit += f_noise
+        self.t_explicit += tq_noise
+
+    def get_disturbance_on_drone_body(self, state: dynamics_state.State) -> np.ndarray:
+        v_local_wind = self.wind_field_model.get_solution(self.u_free, state.position)
+        alpha = 0.3  # a magic number accounting the distance between drone body and the rotor
+        v_total_wind = utils.FrdFluConverter.flip_vector(self.v_i_average*alpha + v_local_wind)
+        f = AirDrag.get_air_drag(v_total_wind - state.v)
+        return f
+    
+    def step_delayed_rotation_speed(self, rotor_set: rotor.RotorSet) -> None:
+        """This function low pass filter the rotation speed
+        """
+        alpha = 0.95 # amount of delay
+        if self.delayed_rotor_set_speed is None:
+            self.delayed_rotor_set_speed = []
+            for rotor in rotor_set.rotors:
+                self.delayed_rotor_set_speed.append(rotor.rotation_speed)
+        else:
+            for i, rotor in enumerate(rotor_set.rotors):
+                self.delayed_rotor_set_speed[i] = (1.0 - alpha) * rotor.rotation_speed + alpha * self.delayed_rotor_set_speed[i]
+
+
+class AggregatedDisturbanceForce(DisturbanceForce):
+    """This class is used to aggregate multiple disturbance forces. It is not a disturbance force itself.
+    """
+    def __init__(self, wind_effect_disturbance: WindEffectNearWall, air_drag: AirDrag) -> None:
+        super().__init__()
+        self.wind_effect_disturbance = wind_effect_disturbance
+
+    def update_explicit_wrench(self, t: float, state: dynamics_state.State, rotor_set: rotor.RotorSet, force_control, torque_control) -> None:
+        self.wind_effect_disturbance.update_explicit_wrench(t, state, rotor_set, force_control, torque_control)
+        
+        self.f_explicit = self.wind_effect_disturbance.f_explicit
+        self.t_explicit = self.wind_effect_disturbance.t_explicit
+
 
 if __name__ == "__main__":
     wall = WallEffect()
