@@ -5,6 +5,7 @@ import pickle
 
 import trajectory_generator_qp
 import trajectory_logger
+import common_utils.robust_pickle
 
 class FlightMap:
     def __init__(self, subtrajs: list[trajectory_generator_qp.TrajectoryGenerator]) -> None:
@@ -121,22 +122,24 @@ def construct_map_file_path(file_name: str) -> str:
 def write_flight_map(map: FlightMap, file_name: str) -> None:
     """Write trajectory information into file"""
     file_path = construct_map_file_path(file_name)
+    relative_path = os.path.relpath(file_path, os.getcwd())
     if os.path.exists(file_path):
-        raise ValueError("File exist: " + file_path)
+        raise ValueError("File exist: " + relative_path)
     else:
         with open(file_path, 'wb') as file:
             pickle.dump(map, file)
-        print("Map data is written into:\n" + file_path)
+        print("Map data is written into:\n" + relative_path)
 
 def read_flight_map(file_name: str) -> FlightMap:
     file_path = construct_map_file_path(file_name)
+    relative_path = os.path.relpath(file_path, os.getcwd())
     if os.path.exists(file_path):
-        print("Map data read from:\n" + file_path)
+        print("Map data read from:\n" + relative_path)
         with open(file_path, 'rb') as file:
             loaded_map = pickle.load(file)
         return loaded_map
     else:
-        raise ValueError("File not exist: " + file_path)
+        raise ValueError("File not exist: " + relative_path)
         
 def construct_map_with_subtrajs(is_random=True, num_of_subtrajs: int=0, subtraj_id: list[int]=[]) -> FlightMap:
     subtrajs = []
