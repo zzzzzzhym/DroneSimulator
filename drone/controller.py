@@ -5,6 +5,8 @@ import dynamics
 import parameters as params
 import trajectory
 import disturbance_estimator
+import inflow_model.propeller_lookup_table as propeller_lookup_table
+import propeller
 
 class DroneController:
     def __init__(self, drone: params.Drone) -> None:
@@ -28,34 +30,77 @@ class DroneController:
         self.f_d = np.array([0.0, 0.0, 0.0])    # desired force in inertial frame
         self.f_d_dot = np.array([0.0, 0.0, 0.0])
         self.psi_r_rd = 0.0 # debug use only
-        self.force_motor = np.array([0.0, 0.0, 0.0, 0.0])
-        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wall_effect", 0.01)
+        self.force_motor_desired = np.array([0.0, 0.0, 0.0, 0.0])
+        self.force_motor_available = np.array([0.0, 0.0, 0.0, 0.0])
+        self.rotation_speed = np.array([0.0, 0.0, 0.0, 0.0])
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test", 0.01)
         self.f_disturb = np.array([0.0, 0.0, 0.0])
         self.torque_disturb = np.array([0.0, 0.0, 0.0])        
         self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
         self.f_disturb_base = np.array([0.0, 0.0, 0.0])
         self.torque_disturb_base = np.array([0.0, 0.0, 0.0])
+        self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6_with_trail")
+        self.propeller = propeller.apc_8x6
+        self.is_warmed_up = False
+        self.is_using_baseline_disturbance_estimator = False
+        self.is_using_any_disturbance_estimator = True
 
     def step_controller(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference):
         self.step_tracking_error(state, ref)
-        self.step_disturbance_estimator(state)
+        if self.is_warmed_up:
+            # skip disturbance estimator at the first cycle to prevent large initial deviation
+            self.step_disturbance_estimator(state)
+        else:
+            self.is_warmed_up = True
         self.step_desired_force(state, ref)
         self.step_tracking_control(state)
         self.step_desired_pose(ref)
         self.step_attitude_error(state)
         self.step_attitude_control(state)
         self.step_error_function_so3(state)
-        self.step_motor_force()
+        self.step_motor_output(state)
 
     def step_disturbance_estimator(self, state: dynamics.DroneDynamics):
         # tracking_error = np.zeros(6)  # assume no tracking error term in disturbance estimator
         tracking_error = np.hstack((self.e_v, np.zeros(3)))
-        self.disturbance_estimator.step_disturbance(state.state.v, state.state.q, self.force_motor, self.get_disturbance(state), tracking_error)
-        self.f_disturb = np.array([self.disturbance_estimator.f_x.disturbance, self.disturbance_estimator.f_y.disturbance, self.disturbance_estimator.f_z.disturbance])
-        self.torque_disturb = np.array([self.disturbance_estimator.tq_x.disturbance, self.disturbance_estimator.tq_y.disturbance, self.disturbance_estimator.tq_z.disturbance])
-        self.baseline_disturbance_estimator.step_disturbance(self.get_disturbance(state), tracking_error)
-        self.f_disturb_base = np.array([self.baseline_disturbance_estimator.f_x.disturbance, self.baseline_disturbance_estimator.f_y.disturbance, self.baseline_disturbance_estimator.f_z.disturbance])
-        self.torque_disturb_base = np.array([self.baseline_disturbance_estimator.tq_x.disturbance, self.baseline_disturbance_estimator.tq_y.disturbance, self.baseline_disturbance_estimator.tq_z.disturbance])
+        self.disturbance_estimator.step_disturbance(
+            state.state.position,
+            state.state.v,
+            state.state.q,
+            state.state.omega,
+            self.f[2],
+            self.torque,
+            np.array([state.rotors.rotors[0].rotation_speed, 
+                      state.rotors.rotors[1].rotation_speed, 
+                      state.rotors.rotors[2].rotation_speed, 
+                      state.rotors.rotors[3].rotation_speed]),
+            self.get_disturbance(state),
+            tracking_error
+        )
+        self.f_disturb = np.array([
+            self.disturbance_estimator.f_x.disturbance,
+            self.disturbance_estimator.f_y.disturbance,
+            self.disturbance_estimator.f_z.disturbance
+        ])
+        self.torque_disturb = np.array([
+            self.disturbance_estimator.tq_x.disturbance,
+            self.disturbance_estimator.tq_y.disturbance,
+            self.disturbance_estimator.tq_z.disturbance
+        ])
+        self.baseline_disturbance_estimator.step_disturbance(
+            self.get_disturbance(state),
+            tracking_error
+        )
+        self.f_disturb_base = np.array([
+            self.baseline_disturbance_estimator.f_x.disturbance,
+            self.baseline_disturbance_estimator.f_y.disturbance,
+            self.baseline_disturbance_estimator.f_z.disturbance
+        ])
+        self.torque_disturb_base = np.array([
+            self.baseline_disturbance_estimator.tq_x.disturbance,
+            self.baseline_disturbance_estimator.tq_y.disturbance,
+            self.baseline_disturbance_estimator.tq_z.disturbance
+        ])
 
     def get_disturbance(self, state: dynamics.DroneDynamics):
         """Distrubance force in body frame"""
@@ -70,7 +115,11 @@ class DroneController:
         e3 = np.array([0.0, 0.0, 1.0])
         self.f_d = (-params.Control.k_x*self.e_x - params.Control.k_v *
                      self.e_v - self.params.m*params.Environment.g*e3 + self.params.m*ref.x_d_dot2)
-        self.f_d += -state.state.pose@self.f_disturb # add disturbance force
+        if self.is_using_any_disturbance_estimator:
+            if self.is_using_baseline_disturbance_estimator:
+                self.f_d += -state.state.pose@self.f_disturb_base # add disturbance force
+            else:
+                self.f_d += -state.state.pose@self.f_disturb # add disturbance force
         if np.abs(self.f_d@self.f_d) < 0.0001:
             print('Warning: DroneController: f_d too close to 0')
             self.f_d = -0.0001*e3    # z positive points down
@@ -163,39 +212,29 @@ class DroneController:
                         1 - self.pose_desired[:,1]@state.state.pose[:,1] +
                         1 - self.pose_desired[:,2]@state.state.pose[:,2])
     
-    def step_motor_force(self, can_saturate=True):
-        f_motor_raw = self.params.m_wrench_to_thrust@np.hstack((self.f[2], self.torque))
-        if can_saturate:
-            self.force_motor = np.clip(f_motor_raw, a_max=self.params.f_motor_max, a_min=self.params.f_motor_min)
-            state = self.params.m_thrust_to_wrench@self.force_motor
-            self.f[2] = state[0]
-            self.torque = state[1:]
+    def step_motor_output(self, state: dynamics.DroneDynamics, is_using_inflow_model: bool=False):
+        self.force_motor_desired = self.params.m_wrench_to_thrust@np.hstack((self.f[2], self.torque))
+        if is_using_inflow_model:
+            # with inflow model
+            for i, thrust in enumerate(self.force_motor_desired):
+                self.rotation_speed[i] = self.propeller_force_table.get_rotation_speed(
+                    state.rotors.rotors[i].local_wind_velocity,
+                    state.rotors.rotors[i].velocity_inertial_frame,
+                    state.rotors.rotors[i].pose,
+                    state.rotors.rotors[i].rotation_speed,
+                    thrust
+                )
         else:
-            self.force_motor = f_motor_raw
+            # without inflow model
+            for i, thrust in enumerate(self.force_motor_desired):
+                self.rotation_speed[i] = self.propeller_force_table.get_rotation_speed(
+                    np.zeros(3),
+                    np.zeros(3),
+                    state.rotors.rotors[i].pose,
+                    state.rotors.rotors[i].rotation_speed,
+                    thrust
+                )
 
-    def step_motor_force_wip(self):
-        """this could be formulated to a linear programming problem TBD"""
-        f_motor_raw = self.params.m_wrench_to_thrust@np.hstack((self.f[2], self.torque))
-        if np.max(np.abs(f_motor_raw)) > self.params.f_motor_max:
-            print("Full commanded motor force saturated!")
-            f_torque_only = self.params.m_wrench_to_thrust@np.hstack((0.0, self.torque))
-            f_torque_only = self.get_saturated_motor_force(f_torque_only)
-            df = self.params.f_motor_max - np.max(np.abs(f_torque_only))
-            self.force_motor = f_torque_only + df
-        else:
-            self.force_motor = f_motor_raw
-        state = self.params.m_thrust_to_wrench@self.force_motor
-        self.f[2] = state[0]
-        self.torque = state[1:]
-
-    def get_saturated_motor_force(self, f_raw):
-        f_max = np.max(np.abs(f_raw))
-        if f_max > self.params.f_motor_max:
-            coeff = self.params.f_motor_max/f_max
-            f_saturated = coeff*f_raw
-        else:
-            f_saturated = f_raw
-        return f_saturated
-
-if __name__ == "__main__":
-    pass
+    def get_control_output(self):
+        """controller provides yaw torque and rotation speed because rotor yaw torque is not modeled"""
+        return self.rotation_speed, self.torque[2]

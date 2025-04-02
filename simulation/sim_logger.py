@@ -30,6 +30,9 @@ class Logger:
         """Assume buffer and the final result dict has the same keys"""
         for key in self.buffer:
             self.output[key] = np.array(self.buffer[key])
+            # for scalar values, reshape to 2D to prevent hstack error in construct_csv_array
+            if self.output[key].ndim == 1:  
+                self.output[key] = self.output[key].reshape(-1, 1)
 
     def get_items_to_csv(self):
         items = []
@@ -38,8 +41,11 @@ class Logger:
             if "can_save_to_file" in val:
                 if val["can_save_to_file"]:
                     items.append(key)
-                    for suffix in val["components"]:
-                        headers.append(key + "_" + suffix)
+                    if len(val["components"]) == 0:
+                        headers.append(key)
+                    else:
+                        for suffix in val["components"]:
+                            headers.append(key + "_" + suffix)
         return items, headers
 
     def construct_csv_array(self) -> tuple[str, np.ndarray]:
@@ -59,5 +65,14 @@ class Logger:
         else:
             raise ValueError("File already exist:\n" + file_path)
 
-
+    def generate_data_map(self) -> dict:
+        """Generate a dictionary that maps the keys in the buffer to their corresponding components.
+        This is used to generate the header for the CSV file."""
+        _, headers = self.get_items_to_csv()
+        header_map = {header: idx for idx, header in enumerate(headers)}
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        map_file_path = os.path.join(current_dir, "data_map.yaml")
+        with open(map_file_path, "w") as f:
+            for key, value in header_map.items():
+                yaml.dump({key: value}, f)
 

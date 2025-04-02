@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import yaml
 
 import torch
 import torch.nn as nn
@@ -15,23 +16,44 @@ import model_config
 import data_manager
 
 class Trainer:
-    def __init__(self, config: model_config.ModelConfig) -> None:
-        self.config = config
-        self.phi_net = model.PhiNet(config.phi_net)
-        self.h_net = model.HNet(config.h_net)
+    def __init__(self, data_menu: list, input_label_map_file: str, column_map_file: str) -> None:
+        self.data_manager_instance = data_manager.DataManager(
+            data_menu, input_label_map_file, column_map_file
+        )
+        self.loaderset_phi, self.loaderset_a = self.data_manager_instance.get_data()
+        self.dim_of_input = len(self.data_manager_instance.input_columns)
+        self.dim_of_label = len(self.data_manager_instance.label_columns)
+        self.num_of_conditions = len(data_menu)
+        self.model_factory_instance = model.ModelFactory(
+            self.num_of_conditions,
+            self.dim_of_input,
+            self.data_manager_instance.input_mean_vector,
+            self.data_manager_instance.input_scale_vector,
+            self.data_manager_instance.label_mean_vector,
+            self.data_manager_instance.label_scale_vector,
+        )
+        self.phi_net, self.h_net, self.dim_of_feature = self.model_factory_instance.generate_nets()
+        self.config = Trainer.load_config("trainer_config.yaml")
+
         self.criterion = nn.MSELoss()
         self.criterion_h = nn.CrossEntropyLoss()
-        self.optimizer_h = optim.Adam(self.h_net.parameters(), lr=config.trainer.learning_rate)
-        self.optimizer_phi = optim.Adam(self.phi_net.parameters(), lr=config.trainer.learning_rate)
+        self.optimizer_h = optim.Adam(self.h_net.parameters(), lr=self.config["learning_rate"])
+        self.optimizer_phi = optim.Adam(self.phi_net.parameters(), lr=self.config["learning_rate"])
         # initialization
         self.optimizer_phi.zero_grad()
-        self.h_net.zero_grad()
-        self.loaderset_a = []
-        self.loaderset_phi = []
-        self.dataset = []
+        self.optimizer_h.zero_grad()
         self.loss_phi_trace = []
         self.loss_h_trace = []
-        self.a_trace =[np.zeros((0, config.phi_net.dim_of_output, config.dim_of_label))] * (self.config.num_of_conditions)   # a list of 3D array, a_trace[condition_ID][iteration] = a where a is the a matrix
+        self.a_trace =[np.zeros((0, self.dim_of_feature, self.dim_of_label))] * (self.num_of_conditions)   # a list of 3D array, a_trace[condition_ID][iteration] = a where a is the a matrix
+
+    @staticmethod
+    def load_config(config_file: str):
+        """Load model configuration from YAML file"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(current_dir, config_file)
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+        return config
 
     def get_optimal_a(self, phi: torch.Tensor, ground_truth):
         """
@@ -51,7 +73,7 @@ class Trainer:
         if torch.norm(a, 'fro') < 0.00001:
             raise ValueError(f"a is too small, a = {a}")
         else:
-            a = a / torch.norm(a, 'fro') * self.config.trainer.gamma
+            a = a / torch.norm(a, 'fro') * self.config["gamma"]
         return a
 
     @staticmethod
@@ -60,31 +82,31 @@ class Trainer:
     
     def can_train_h_net(self) -> bool:
         """randomly insert h_net training"""
-        can_do = np.random.rand() <= 1.0 / self.config.trainer.frequency_h
+        can_do = np.random.rand() <= 1.0 / self.config["frequency_h"]
         return can_do
 
     def step_training(self, epoch: int) -> tuple[float, float]:
         # Randomize the order in which we train over the subdatasets
-        randomized_cases = np.arange(self.config.num_of_conditions)
+        randomized_cases = np.arange(self.num_of_conditions)
         np.random.shuffle(randomized_cases)
         
         loss_phi_sum = 0.0
         loss_h_sum = 0.0
-        a_trace =[np.zeros((0, config.phi_net.dim_of_output, config.dim_of_label))] * (self.config.num_of_conditions)
+        a_trace =[np.zeros((0, self.dim_of_feature, self.dim_of_label))] * (self.num_of_conditions)
         for case_num in randomized_cases:
             with torch.no_grad():
                 batch_phi = next(iter(self.loaderset_phi[case_num]))
                 batch_a = next(iter(self.loaderset_a[case_num]))
             self.optimizer_phi.zero_grad()   # reset gradient before each training section starts
             phi_output = self.phi_net(batch_phi['input'])
-            if config.Trainer.is_dynamic_environment:
+            if self.config["is_dynamic_environment"]:
                 a = self.get_optimal_a(phi_output, batch_phi['output'])
             else:
-                a = torch.ones((config.phi_net.dim_of_output, config.dim_of_label))
-                a[config.phi_net.dim_of_output-1,:] = torch.zeros(config.dim_of_label)
+                a = torch.ones((self.dim_of_feature, self.dim_of_label))
+                a[self.dim_of_feature-1,:] = torch.zeros(self.dim_of_label)
             prediction = self.get_prediction(phi_output, a)
             loss_h = self.criterion_h(self.h_net(phi_output), batch_phi['c'])
-            loss_phi = 10000*self.criterion(prediction, batch_phi['output']) - self.config.trainer.alpha*loss_h
+            loss_phi = 10000*self.criterion(prediction, batch_phi['output']) - self.config["alpha"]*loss_h
             loss_phi.backward()
             self.optimizer_phi.step()
 
@@ -98,13 +120,13 @@ class Trainer:
             '''
             Spectral normalization
             '''
-            if self.config.trainer.spectral_norm > 0:
+            if self.config["spectral_norm"] > 0:
                 for param in self.phi_net.parameters():
                     M = param.detach().numpy()
                     if M.ndim > 1:
                         s = np.linalg.norm(M, 2)
-                        if s > self.config.trainer.spectral_norm:
-                            param.data = param / s * self.config.trainer.spectral_norm
+                        if s > self.config["spectral_norm"]:
+                            param.data = param / s * self.config["spectral_norm"]
             '''
             record loss trace
             '''
@@ -115,30 +137,22 @@ class Trainer:
         return loss_phi_sum, loss_h_sum, a_trace
 
 
-    def train_model(self, data_files: list, is_back2back=False):
-        if is_back2back:
-            self.dataset = data_manager.prepare_back2back_datasets(data_files)
-        else:
-            self.dataset = data_manager.prepare_datasets(data_files)
-        self.loaderset_phi, self.loaderset_a = data_manager.prepare_loadersets(self.dataset, self.config.trainer)
+    def train_model(self):
         self.loss_phi_trace = []
         self.loss_h_trace = []
-        for epoch in range(self.config.trainer.num_epochs):
+        for epoch in range(self.config["num_epochs"]):
             loss_phi, loss_h, a_trace = self.step_training(epoch)
-            self.loss_phi_trace.append(loss_phi/self.config.num_of_conditions)
-            self.loss_h_trace.append(loss_h/self.config.num_of_conditions)
+            self.loss_phi_trace.append(loss_phi/self.num_of_conditions)
+            self.loss_h_trace.append(loss_h/self.num_of_conditions)
             for case_num in range(len(a_trace)):
                 self.a_trace[case_num] = np.concatenate((self.a_trace[case_num], a_trace[case_num]), axis=0)
             if epoch % 100 == 0:
                 print('[%d] loss_f: %.2f loss_c: %.2f' % (epoch + 1, self.loss_phi_trace[-1], self.loss_h_trace[-1]))
     
-    def verify_model(self, test_data: list[str], is_back2back=False):
+    def verify_model(self, test_data: list[str]):
         self.phi_net.eval()
         with torch.no_grad():
-            if is_back2back:
-                dataset = data_manager.prepare_back2back_datasets(test_data)
-            else:
-                dataset = data_manager.prepare_datasets(test_data)
+            dataset = self.data_manager_instance.prepare_datasets(test_data)
             phi_out = self.phi_net(torch.tensor(dataset[0].input))
             groundtruth = torch.tensor(dataset[0].output)
             a = self.get_optimal_a(phi_out, groundtruth)
@@ -198,20 +212,52 @@ class Trainer:
         file_path = os.path.join(current_dir, "model", name + ".pth")
         torch.save({"phi": self.phi_net.state_dict(),
                     "h": self.h_net.state_dict(),
-                    "config": self.config}, 
+                    "config": self.gather_model_config()}, 
                     file_path)
+        
+    def gather_model_config(self):
+        """Extract model configuration from the model factory and data manager for later reconstruct the model in application.
+        Model config contains how to recreate the model and how to use it"""
+        config = {"phi_net_input_args": {},
+                  "h_net_input_args": {},
+                  "phi_net_io_fields": {}}
+        config["phi_net_input_args"]["dim_of_input "] = self.dim_of_input
+        config["phi_net_input_args"]["dim_of_output"] = self.dim_of_feature
+        config["phi_net_input_args"]["dim_of_layers"] = self.model_factory_instance.config["PhiNet"]["hidden_layer_dimensions"]
+        config["phi_net_input_args"]["input_mean"] = self.data_manager_instance.input_mean_vector
+        config["phi_net_input_args"]["input_scale"] = self.data_manager_instance.input_scale_vector
+        config["phi_net_input_args"]["output_mean"] = self.data_manager_instance.label_mean_vector
+        config["phi_net_input_args"]["output_scale"] = self.data_manager_instance.label_scale_vector
+        config["phi_net_io_fields"] = self.data_manager_instance.input_label_map
+        
+        config["h_net_input_args"]["dim_of_input"] = self.dim_of_feature
+        config["h_net_input_args"]["dim_of_output"] = self.num_of_conditions
+        config["h_net_input_args"]["dim_of_layers"] = self.model_factory_instance.config["HNet"]["hidden_layer_dimensions"]
+        return config
+    
 
 def load_model(name) -> tuple[model.PhiNet, model.HNet, model_config.ModelConfig]:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(current_dir, "model", name + ".pth")       
     package = torch.load(file_path)
-    phi = model.PhiNet(package["config"].phi_net)
+    config = package["config"]
+    # generate an empty phi net
+    phi = model.PhiNet(config["phi_net_input_args"]["dim_of_input "], 
+                       config["phi_net_input_args"]["dim_of_output"], 
+                       config["phi_net_input_args"]["dim_of_layers"], 
+                       config["phi_net_input_args"]["input_mean"], 
+                       config["phi_net_input_args"]["input_scale"], 
+                       config["phi_net_input_args"]["output_mean"], 
+                       config["phi_net_input_args"]["output_scale"])
     phi.load_state_dict(package["phi"])
-    phi.eval()
-    h = model.HNet(package["config"].h_net)
+    phi.eval()  # set to eval mode
+    # similar for h net
+    h = model.HNet(config["h_net_input_args"]["dim_of_input"],
+                   config["h_net_input_args"]["dim_of_output"],
+                   config["h_net_input_args"]["dim_of_layers"])
     h.load_state_dict(package["h"])
     h.eval()
-    return phi, h, package["config"]
+    return phi, h, config
         
 
 if __name__ == "__main__":

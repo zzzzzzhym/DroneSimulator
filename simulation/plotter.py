@@ -15,8 +15,8 @@ class Plotter:
         # self.plot_position_and_derivatives(logger_output)
         # self.plot_omega_and_derivatives(logger_output)
         # self.plot_pose_and_derivatives(logger_output)
-        ## self.plot_trajectory(logger_output)
         # self.plot_quaternion(logger_output)
+        self.plot_trajectory(logger_output)
         self.plot_force_and_torque(logger_output)
         self.plot_position_tracking_error(logger_output)
         self.plot_pose_tracking_error(logger_output)
@@ -154,26 +154,14 @@ class Plotter:
         axs[1, 1].set_ylabel('v_y')
         axs[2, 1].plot(self.t_span, logger["v_d"][:, 2], marker='x')
         axs[2, 1].set_ylabel('v_z')
-        t_diff, x_d_diff = utils.get_signal_derivative(self.t_span, logger["x_d"], self.dt)
-        axs[0, 1].plot(t_diff, x_d_diff[:, 0], marker='.')
-        axs[1, 1].plot(t_diff, x_d_diff[:, 1], marker='.')
-        axs[2, 1].plot(t_diff, x_d_diff[:, 2], marker='.')
 
         axs[0, 2].plot(self.t_span, logger["x_d_dot2"][:, 0], marker='x')
         axs[1, 2].plot(self.t_span, logger["x_d_dot2"][:, 1], marker='x')
         axs[2, 2].plot(self.t_span, logger["x_d_dot2"][:, 2], marker='x')
-        t_diff, v_d_diff = utils.get_signal_derivative(self.t_span, logger["v_d"], self.dt)
-        axs[0, 2].plot(t_diff, v_d_diff[:, 0], marker='.')
-        axs[1, 2].plot(t_diff, v_d_diff[:, 1], marker='.')
-        axs[2, 2].plot(t_diff, v_d_diff[:, 2], marker='.')
 
         axs[0, 3].plot(self.t_span, logger["x_d_dot3"][:, 0], marker='x')
         axs[1, 3].plot(self.t_span, logger["x_d_dot3"][:, 1], marker='x')
         axs[2, 3].plot(self.t_span, logger["x_d_dot3"][:, 2], marker='x')
-        t_diff, x_d_dot2_diff = utils.get_signal_derivative(self.t_span, logger["x_d_dot2"], self.dt)
-        axs[0, 3].plot(t_diff, x_d_dot2_diff[:, 0], marker='.')
-        axs[1, 3].plot(t_diff, x_d_dot2_diff[:, 1], marker='.')
-        axs[2, 3].plot(t_diff, x_d_dot2_diff[:, 2], marker='.')
 
     def plot_force_and_torque(self, logger: np.ndarray):
         fig, axs = plt.subplots(3, 2, sharex=True)
@@ -443,7 +431,10 @@ class Plotter:
         axs[1].set_ylabel("f_motor_1")
         axs[2].set_ylabel("f_motor_2")
         axs[3].set_ylabel("f_motor_3")
-        axs[4].plot(self.t_span, logger["rotor_spd"])
+        axs[4].plot(self.t_span, logger["rotor_0_rotation_spd"])
+        axs[4].plot(self.t_span, logger["rotor_1_rotation_spd"])
+        axs[4].plot(self.t_span, logger["rotor_2_rotation_spd"])
+        axs[4].plot(self.t_span, logger["rotor_3_rotation_spd"])
         axs[4].set_ylabel("rotor_spd [RPM]")
 
     def plot_omega_desired(self, logger: np.ndarray):

@@ -127,12 +127,23 @@ class FrdFluConverter:
                           [0, 0, -1]])  # m_frd_flu.T = m_frd_flu so both direction of conversion use the same matrix
     
     @staticmethod
-    def flip(x: np.ndarray):
+    def flip_vector(x: np.ndarray):
         """x can be a vector or rotation matrix
         if x is in FRD frame, convert it to FLU frame
         if x is in FLU frame, convert it to FRD frame
         """
         return FrdFluConverter.m_frd_flu@x
+    
+    @staticmethod
+    def flip_pose(x: np.ndarray):
+        """x is a rotation matrix in original frame,
+        result is a rotation matrix in the flipped frame representation the same rotation
+        e.g. drone pose in defined in FRD frame, rotor is defined in FLU frame
+        they share the same rotation because they share the same body
+        then the pose matrix relation is pose_rotor = flip_pose(pose_drone)
+        This is convert the frame -> rotate -> convert back to the original frame
+        """
+        return FrdFluConverter.m_frd_flu@x@FrdFluConverter.m_frd_flu
     
 def convert_rpm_to_radps(rpm):
     return rpm/60*2*np.pi

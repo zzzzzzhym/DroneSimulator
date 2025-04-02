@@ -184,7 +184,7 @@ class FlowPassFlatPlate:
             elif np.abs(z2) > self.c:
                 z = z2
             else:
-                warnings.warn("Invalid z: expecting |z| > c")
+                warnings.warn("Invalid z: expecting |z| > c. Possibly inquiring a point on the plate.")
                 return 0, 0
             dWdz = (U * np.exp(-1j * alpha) - U * np.exp(1j * alpha) * self.a**2 / z**2) / (1 - self.a**2 / z**2)
             u = np.real(dWdz)
