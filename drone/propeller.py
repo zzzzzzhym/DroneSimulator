@@ -112,7 +112,7 @@ prop_kde4215xf465_6s_15_5x5_3_dual = Propeller(
     diameter=0.3048*15/12
 )
 
-"""APC_8x6 propeller from inflow model"""
+"""APC_8x6 propeller from inflow model (not ready)"""
 apc_8x6 = Propeller(
     n_inf=np.array([0, 200, 300, 400, 500, 600, 700, 800, 900, 1000])*60/(2*np.pi),     # rad/s to rpm
     f_z_inf=np.array([0.07323629, 0.31446133, 0.55298213, 0.88470807, 1.3132933, 1.84148013, 2.47178404, 3.20659931, 4.04818159, 4.99853133]),

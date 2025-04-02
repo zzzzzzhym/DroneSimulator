@@ -35,7 +35,7 @@ class kde_cf155_tp(Blade):
         return np.radians(20)
 
 
-class apc_8x6(Blade):
+class APC_8x6(Blade):
     """
         Gill, Rajan, and Raffaello D'andrea. "Propeller thrust and drag in forward flight." 
         2017 IEEE Conference on control technology and applications (CCTA). IEEE, 2017.
@@ -47,6 +47,7 @@ class apc_8x6(Blade):
         self.interp_func = interp1d(x_table, y_table, kind="linear")
     
     def get_chord(self, y: float):
+        """Get the chord length at a given y position along the blade."""
         min_length = 0.005
         max_length = 0.024
         weight = self.interp_func(y/self.y_max)
@@ -64,13 +65,26 @@ class apc_8x6(Blade):
         result = (1 - weight)*val_root + weight*val_tip
         return result
 
-class apc_8x6_official_data:
-    omega_apc8x6_official_data_rpm = np.array([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000, 21000, 22000, 23000, 24000, 25000]) # rpm
-    thrust_apc8x6_official_data_lbf = np.array([0.015, 0.061, 0.138, 0.246, 0.385, 0.555, 0.757, 0.990, 1.256, 1.553, 1.884, 2.247, 2.643, 3.073, 3.537, 4.035, 4.569, 5.138, 5.743, 6.385, 7.063, 7.779, 8.532, 9.321, 10.146]) # pound force
+class APC_8x6_OfficialData:
+    # pad official data with 0.0 at the beginning
+    OMEGA_APC8X6_OFFICIAL_DATA_RPM = np.array([0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000, 12000, 13000, 14000, 15000, 16000, 17000, 18000, 19000, 20000, 21000, 22000, 23000, 24000, 25000]) # rpm
+    THRUST_APC8X6_OFFICIAL_DATA_LBF = np.array([0.0, 0.015, 0.061, 0.138, 0.246, 0.385, 0.555, 0.757, 0.990, 1.256, 1.553, 1.884, 2.247, 2.643, 3.073, 3.537, 4.035, 4.569, 5.138, 5.743, 6.385, 7.063, 7.779, 8.532, 9.321, 10.146]) # pound force
+    @staticmethod
+    def get_omega_range():
+        # convert the official data to ISO units
+        rpm_to_rad_per_sec = 2*np.pi/60
+        return (APC_8x6_OfficialData.OMEGA_APC8X6_OFFICIAL_DATA_RPM * rpm_to_rad_per_sec)
+    
+    @staticmethod
+    def get_thrust_range():
+        # convert the official data to ISO units
+        pound_force_to_newton = 4.44822
+        return (APC_8x6_OfficialData.THRUST_APC8X6_OFFICIAL_DATA_LBF * pound_force_to_newton)
+    
 
 
 if __name__ == "__main__":
-    apc_8x6_instance = apc_8x6()
+    apc_8x6_instance = APC_8x6()
     fig, axs = plt.subplots(2, 1, figsize=(10, 8))
 
     y_values = np.linspace(0, apc_8x6_instance.y_max, 100)

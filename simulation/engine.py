@@ -1,25 +1,19 @@
 import numpy as np
 
-import drone.trajectory
-import drone.dynamics
-import drone.dynamics_state
-import drone.controller
-import drone.propeller
-import drone.disturbance_model
 import drone.utils as utils
-import drone.parameters
 import sim_logger
-import scenario_factory
+import scenario
 
 class Engine:
     """Core looping mechanism of simulation. Coordinates controller, trajectory and dynamics model.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, scenario: scenario.Scenario) -> None:
+        self.scenario = scenario
         self.t = 0.0    # simulation epoch time
         self.dt_log = 0.01  # simulation step to log output
         self.dt_controller = 0.01   # controller cycle time
-        self.dt_dynamics = 0.005    # dynamics model cycle time
+        self.dt_dynamics = self.scenario.dynamics.dt    # dynamics model cycle time
         # controller steps per log step, must be an integer
         self.cl_ratio = round(self.dt_log/self.dt_controller)
         # dynamics steps per controller step, must be an integer
@@ -27,34 +21,27 @@ class Engine:
         print("number of controller steps per simulation step: " + str(self.cl_ratio))
         print("number of dynamics model steps per controller step: " +
               str(self.dc_ratio))
-        
-        self.scenario = scenario_factory.Factory.make_scenario(
-            drone.trajectory.RandomWaypoints(300, True),
-            # drone.trajectory.CircleYZ(),
-            # drone.trajectory.Hover(),
-            drone.parameters.PennStateARILab550(),
-            drone.propeller.apc_8x6,
-            drone.disturbance_model.WindEffectNearWall(),
-            self.dt_dynamics)
-        '''
-        data to plot
-        '''
+        # data to plot
         self.t_span = []
-        self.ani = None
+        self.ani = None # for animation
 
     def step_simulation(self, t: float):
         t_controller = t
         for i in range(self.cl_ratio):
             t_controller += i*self.dt_controller
             self.scenario.trajectory.step_reference_state(self.t)
-            self.scenario.dynamics.f = self.scenario.controller.f
-            self.scenario.dynamics.torque = self.scenario.controller.torque
             t_dynamics = t_controller
-            for j in range(self.dc_ratio):
-                t_dynamics += j*self.dt_dynamics
-                self.scenario.dynamics.step_dynamics(t_dynamics)
             self.scenario.controller.step_controller(
                 self.scenario.dynamics, self.scenario.trajectory)
+            for j in range(self.dc_ratio):
+                t_dynamics += j*self.dt_dynamics
+                self.scenario.dynamics.step_dynamics(
+                    t_dynamics, 
+                    self.scenario.controller.f, 
+                    self.scenario.controller.torque, 
+                    self.scenario.controller.rotation_speed
+                )
+
             self.t += self.dt_controller
 
     def run_simulation(self, logger: sim_logger.Logger, t_end):
@@ -80,15 +67,22 @@ class Engine:
             logger.buffer["f_d"].append(self.scenario.controller.f_d)
             logger.buffer["f_d_dot"].append(self.scenario.controller.f_d_dot)
             logger.buffer["f_d_dot2"].append(self.scenario.controller.f_d_dot2)
+            logger.buffer["f_feedback"].append(self.scenario.controller.f_feedback)
+            logger.buffer["f_feedforward"].append(self.scenario.controller.f_feedforward)
+            logger.buffer["f_disturb_compensation"].append(self.scenario.controller.f_disturb_compensation)
             logger.buffer["torque_ctrl_input"].append(self.scenario.controller.torque)
+            logger.buffer["torque_feedback"].append(self.scenario.controller.torque_feedback)
+            logger.buffer["torque_coriolis"].append(self.scenario.controller.torque_coriolis)
+            logger.buffer["torque_feedforward"].append(self.scenario.controller.torque_feedforward)
             logger.buffer["x_d"].append(self.scenario.trajectory.x_d)
             logger.buffer["v_d"].append(self.scenario.trajectory.v_d)
             logger.buffer["x_d_dot2"].append(self.scenario.trajectory.x_d_dot2)
             logger.buffer["x_d_dot3"].append(self.scenario.trajectory.x_d_dot3)
-            logger.buffer["f_motor"].append(self.scenario.controller.force_motor)
+            logger.buffer["f_motor"].append(self.scenario.controller.force_motor_desired)
             logger.buffer["f_disturb"].append(self.scenario.dynamics.f_disturb)
             logger.buffer["f_disturb_est"].append(self.scenario.controller.f_disturb)
             logger.buffer["f_disturb_est_base"].append(self.scenario.controller.f_disturb_base)
+            logger.buffer["f_disturb_sensed_raw"].append(self.scenario.controller.f_disturb_sensed_raw)
             logger.buffer["torque_disturb"].append(self.scenario.dynamics.torque_disturb)
             logger.buffer["torque_disturb_est"].append(self.scenario.controller.torque_disturb)
             logger.buffer["torque_disturb_est_base"].append(self.scenario.controller.torque_disturb_base)
@@ -102,7 +96,22 @@ class Engine:
             logger.buffer["pose_desired"].append(self.scenario.controller.pose_desired)
             logger.buffer["pose_desired_dot"].append(self.scenario.controller.pose_desired_dot)
             logger.buffer["pose_desired_dot2"].append(self.scenario.controller.pose_desired_dot2)
-            logger.buffer["rotor_spd"].append(self.scenario.dynamics.rotor_spd_avg)
+            logger.buffer["rotor_0_rotation_spd"].append(self.scenario.dynamics.rotors.rotors[0].rotation_speed)
+            logger.buffer["rotor_1_rotation_spd"].append(self.scenario.dynamics.rotors.rotors[1].rotation_speed)
+            logger.buffer["rotor_2_rotation_spd"].append(self.scenario.dynamics.rotors.rotors[2].rotation_speed)
+            logger.buffer["rotor_3_rotation_spd"].append(self.scenario.dynamics.rotors.rotors[3].rotation_speed)
+            logger.buffer["rotor_0_rotation_spd_delayed"].append(self.scenario.dynamics.disturbance.delayed_rotor_set_speed[0]) # only works for wind near wall disturbance
+            logger.buffer["rotor_1_rotation_spd_delayed"].append(self.scenario.dynamics.disturbance.delayed_rotor_set_speed[1]) # only works for wind near wall disturbance
+            logger.buffer["rotor_2_rotation_spd_delayed"].append(self.scenario.dynamics.disturbance.delayed_rotor_set_speed[2]) # only works for wind near wall disturbance
+            logger.buffer["rotor_3_rotation_spd_delayed"].append(self.scenario.dynamics.disturbance.delayed_rotor_set_speed[3]) # only works for wind near wall disturbance
+            logger.buffer["rotor_0_position"].append(self.scenario.dynamics.rotors.rotors[0].position_inertial_frame)
+            logger.buffer["rotor_1_position"].append(self.scenario.dynamics.rotors.rotors[1].position_inertial_frame)
+            logger.buffer["rotor_2_position"].append(self.scenario.dynamics.rotors.rotors[2].position_inertial_frame)
+            logger.buffer["rotor_3_position"].append(self.scenario.dynamics.rotors.rotors[3].position_inertial_frame)
+            logger.buffer["rotor_0_velocity"].append(self.scenario.dynamics.rotors.rotors[0].velocity_inertial_frame)
+            logger.buffer["rotor_1_velocity"].append(self.scenario.dynamics.rotors.rotors[1].velocity_inertial_frame)
+            logger.buffer["rotor_2_velocity"].append(self.scenario.dynamics.rotors.rotors[2].velocity_inertial_frame)
+            logger.buffer["rotor_3_velocity"].append(self.scenario.dynamics.rotors.rotors[3].velocity_inertial_frame)
             logger.buffer["b_1d"].append(self.scenario.trajectory.b_1d)
 
 

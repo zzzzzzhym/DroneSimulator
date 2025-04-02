@@ -36,16 +36,61 @@ class RandomWaypoints(TrajectoryReference):
         num_of_segments (int): Number of segments in the trajectory.
         is_2d (bool, optional): If True, the trajectory will be constrained to 2D. Defaults to False.
     """
-    def __init__(self, num_of_segments, is_2d=False):
+    def __init__(self, num_of_segments, is_2d=False, is_random=False) -> None:
         super().__init__()  # Initialize parent class parameters
         self.is_2d = is_2d
-        self.trajectory: flight_map.FlightMap = flight_map.construct_map_with_subtrajs(is_random=False, num_of_subtrajs=num_of_segments, subtraj_id=[0,1,2,3,4])
+        self.trajectory: flight_map.FlightMap = flight_map.construct_map_with_subtrajs(is_random=is_random, num_of_subtrajs=num_of_segments, subtraj_id=[0,1,2,3,4])
         
     def step_reference_state(self, t) -> None:
         self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4 = self.trajectory.read_data_by_time(t)   
         if self.is_2d:
             for state in (self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4):
                 state[0] = 0.0  # set coordinate x to 0
+
+class RandomWaypointsInConstrainedSpace(TrajectoryReference):
+    """constrains the trajectory to certain limits.  
+
+    Args:
+        num_of_segments (int): Number of segments in the trajectory.
+    """
+    def __init__(self, num_of_segments, is_random=False) -> None:
+        super().__init__()  # Initialize parent class parameters
+        x_lim = 0.5
+        y_lim = 8.0
+        self.trajectory: flight_map.FlightMap = flight_map.construct_map_with_subtrajs(
+            is_random=is_random,
+            num_of_subtrajs=num_of_segments,
+            subtraj_id=list(range(200)),
+            x_limit=x_lim,
+            y_limit=y_lim
+        )
+        x = []
+        for t in np.arange(0, self.trajectory.total_time, 0.2):
+            x_d, v_d, x_d_dot2, x_d_dot3, x_d_dot4 = self.trajectory.read_data_by_time(t)
+            x.append(x_d[0])
+        self.x_min = min(x)
+        self.init_x = np.array([-self.x_min, 0.0, 0.0])
+        
+    def step_reference_state(self, t) -> None:
+        self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4 = self.trajectory.read_data_by_time(t)   
+        self.x_d[0] = self.x_d[0] - self.x_min
+
+class Figure8(TrajectoryReference):
+    def __init__(self, num_of_loops) -> None:
+        super().__init__()  # Initialize parent class parameters
+        self.trajectory: flight_map.FlightMap = flight_map.construct_map_with_specific_subtrajs(
+            ["figure_8.pkl"]*num_of_loops
+        )
+        x = []
+        for t in np.arange(0, self.trajectory.total_time, 0.2):
+            x_d, v_d, x_d_dot2, x_d_dot3, x_d_dot4 = self.trajectory.read_data_by_time(t)
+            x.append(x_d[0])
+        self.x_min = min(x)
+        self.init_x = np.array([-self.x_min, 0.0, 0.0])    
+
+    def step_reference_state(self, t) -> None:
+        self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4 = self.trajectory.read_data_by_time(t)   
+        self.x_d[0] = self.x_d[0] - self.x_min
 
 class SpiralAndSpin(TrajectoryReference):
     def step_reference_state(self, t) -> None:

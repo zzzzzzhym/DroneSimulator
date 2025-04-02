@@ -12,7 +12,7 @@ class TestWindEffectNearWall(unittest.TestCase):
         drone_state = state.State()
         rotor_instance = rotor.RotorSet(params.PennStateARILab550(), propeller.apc_8x6)
         instance = disturbance.WindEffectNearWall()
-        instance.u_free = np.array([0.0, 0.0, 0.0])
+        instance.u_free_const = np.array([0.0, 0.0, 0.0])
         t = 0.0
         force_control = np.array([0.0, 0.0, 5.0])
         torque_control = np.array([0.0, 0.0, 0.0])

@@ -2,11 +2,11 @@ import unittest
 import numpy as np
 
 import bet
-from blade_params import Blade, apc_8x6
+from blade_params import Blade, APC_8x6
 
 class TestBet(unittest.TestCase):
     def setUp(self):
-        self.bet_instance = bet.BladeElementTheory(apc_8x6())
+        self.bet_instance = bet.BladeElementTheory(APC_8x6())
 
     def test_get_v_flow_disk_frame(self):
         v_flow_disk_frame = self.bet_instance.get_v_flow_disk_frame(u_free=np.array([10, 0, 0]), v_i=0.0, v_forward=np.array([0, 0, 0]), r_disk=np.eye(3))
@@ -165,13 +165,13 @@ class TestBet(unittest.TestCase):
         omega_blade = 2000*2*np.pi/60
         is_ccw_blade = True
         v_flow_disk_frame = self.bet_instance.get_v_flow_disk_frame(u_free, v_i, v_forward, r_disk)
-        df_ccw = self.bet_instance.integrate_element_force_over_one_revolution(y, v_flow_disk_frame, omega_blade, is_ccw_blade)
+        df_ccw = self.bet_instance.integrate_element_force_over_one_revolution_per_blade(y, v_flow_disk_frame, omega_blade, is_ccw_blade)
 
         u_free[1] = -u_free[1]
         omega_blade = -omega_blade
         is_ccw_blade = False
         v_flow_disk_frame = self.bet_instance.get_v_flow_disk_frame(u_free, v_i, v_forward, r_disk)
-        df_cw = self.bet_instance.integrate_element_force_over_one_revolution(y, v_flow_disk_frame, omega_blade, is_ccw_blade)
+        df_cw = self.bet_instance.integrate_element_force_over_one_revolution_per_blade(y, v_flow_disk_frame, omega_blade, is_ccw_blade)
 
         self.assertAlmostEqual(df_ccw[0], df_cw[0])
         self.assertAlmostEqual(df_ccw[1], -df_cw[1])

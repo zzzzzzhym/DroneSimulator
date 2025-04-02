@@ -87,7 +87,7 @@ class PennStateARILab550(Drone):
         h = 0.095  # height rotor to center of gravity [m]
         inertia = np.diag([0.0820, 0.0845, 0.1377])  # [kgm2]  this is temporary value, copy from elsewhere
         num_of_rotors = 4 
-        c_tau_f = 8.004e-4  # this is temporary value, copy from elsewhere
+        c_tau_f = 8.004e-3  # this is temporary value, copy from SE3 paper and intendedly increased because the weak yaw torque will hit rotor limit easily, increasing this will make a stronger yaw torque control
         # rotors are 90 degree apart
         # rotor labels start from front left in a counter-clockwise order
         p_0 = np.array([d*np.cos(np.pi/4), d*np.sin(np.pi/4), h])   # front left
@@ -133,8 +133,8 @@ class Control:
 
 # miscellaneous parameters (used in disturbance model)
 rotor_radius = 0.2 # [m] 15inch diameter rotor
-c_d = 1.5   # unit free [0.5-1.5]
-area_frontal = 0.1  # m^2 [0.01-0.1]
+c_d = 1.2   # unit free [0.5-1.5]   "An Experimental Study of Drag Coefficients of a Quadrotor Airframe." Table 2
+area_frontal = 0.03  # m^2 [0.01-0.1]   "An Experimental Study of Drag Coefficients of a Quadrotor Airframe." Table 2
 
 if __name__ == "__main__":
     test_instance = TrackingOnSE3()
