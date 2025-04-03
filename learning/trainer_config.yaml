@@ -1,0 +1,8 @@
+# training process related parameters
+learning_rate: 0.0005
+frequency_h: 2
+num_epochs: 1000
+alpha: 0.01    # weight of cross entropy loss
+gamma: 10.0    # normalization of a
+spectral_norm: 2.0    # normalization
+is_dynamic_environment: True    # flag to adapt to environment with matrix a, False equivalent to a = ones(size)

@@ -130,7 +130,7 @@ class DroneDynamics:
                       utils.convert_quaternion_to_rotation_matrix(np.array((y[6], y[7], y[8], y[9]))), 
                       omega)
         self.rotors.step_rotor_states(state, self.get_thrust_from_input(self.f, self.torque))
-        self.disturbance.update_explicit_wrench(t, state, self.rotors, self.f, self.torque)
+        # self.disturbance.update_explicit_wrench(t, state, self.rotors, self.f, self.torque) # may significantly increase computation time
 
         position_dot = v
         v_dot = params.Environment.g*np.array([0.0, 0.0, 1.0]) + \

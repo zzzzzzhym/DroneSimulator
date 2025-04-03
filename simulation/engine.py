@@ -9,17 +9,18 @@ import drone.disturbance_model
 import drone.utils as utils
 import drone.parameters
 import sim_logger
-import scenario_factory
+import scenario
 
 class Engine:
     """Core looping mechanism of simulation. Coordinates controller, trajectory and dynamics model.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, scenario: scenario.Scenario) -> None:
+        self.scenario = scenario
         self.t = 0.0    # simulation epoch time
         self.dt_log = 0.01  # simulation step to log output
         self.dt_controller = 0.01   # controller cycle time
-        self.dt_dynamics = 0.005    # dynamics model cycle time
+        self.dt_dynamics = self.scenario.dynamics.dt    # dynamics model cycle time
         # controller steps per log step, must be an integer
         self.cl_ratio = round(self.dt_log/self.dt_controller)
         # dynamics steps per controller step, must be an integer
@@ -27,15 +28,7 @@ class Engine:
         print("number of controller steps per simulation step: " + str(self.cl_ratio))
         print("number of dynamics model steps per controller step: " +
               str(self.dc_ratio))
-        
-        self.scenario = scenario_factory.Factory.make_scenario(
-            drone.trajectory.RandomWaypoints(300, True),
-            # drone.trajectory.CircleYZ(),
-            # drone.trajectory.Hover(),
-            drone.parameters.PennStateARILab550(),
-            drone.propeller.apc_8x6,
-            drone.disturbance_model.WindEffectNearWall(),
-            self.dt_dynamics)
+
         '''
         data to plot
         '''
@@ -102,7 +95,18 @@ class Engine:
             logger.buffer["pose_desired"].append(self.scenario.controller.pose_desired)
             logger.buffer["pose_desired_dot"].append(self.scenario.controller.pose_desired_dot)
             logger.buffer["pose_desired_dot2"].append(self.scenario.controller.pose_desired_dot2)
-            logger.buffer["rotor_spd"].append(self.scenario.dynamics.rotor_spd_avg)
+            logger.buffer["rotor_0_rotation_spd"].append(self.scenario.dynamics.rotors.rotors[0].rotation_speed)
+            logger.buffer["rotor_1_rotation_spd"].append(self.scenario.dynamics.rotors.rotors[1].rotation_speed)
+            logger.buffer["rotor_2_rotation_spd"].append(self.scenario.dynamics.rotors.rotors[2].rotation_speed)
+            logger.buffer["rotor_3_rotation_spd"].append(self.scenario.dynamics.rotors.rotors[3].rotation_speed)
+            logger.buffer["rotor_0_position"].append(self.scenario.dynamics.rotors.rotors[0].position_inertial_frame)
+            logger.buffer["rotor_1_position"].append(self.scenario.dynamics.rotors.rotors[1].position_inertial_frame)
+            logger.buffer["rotor_2_position"].append(self.scenario.dynamics.rotors.rotors[2].position_inertial_frame)
+            logger.buffer["rotor_3_position"].append(self.scenario.dynamics.rotors.rotors[3].position_inertial_frame)
+            logger.buffer["rotor_0_velocity"].append(self.scenario.dynamics.rotors.rotors[0].velocity_inertial_frame)
+            logger.buffer["rotor_1_velocity"].append(self.scenario.dynamics.rotors.rotors[1].velocity_inertial_frame)
+            logger.buffer["rotor_2_velocity"].append(self.scenario.dynamics.rotors.rotors[2].velocity_inertial_frame)
+            logger.buffer["rotor_3_velocity"].append(self.scenario.dynamics.rotors.rotors[3].velocity_inertial_frame)
             logger.buffer["b_1d"].append(self.scenario.trajectory.b_1d)
 
 

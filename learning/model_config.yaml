@@ -1,0 +1,11 @@
+PhiNet:
+  hidden_layer_dimensions:
+    - 50
+    - 60
+    - 50
+
+HNet:
+  hidden_layer_dimensions:
+    - 20
+  
+dim_of_feature: 5
