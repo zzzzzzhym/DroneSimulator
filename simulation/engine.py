@@ -9,17 +9,18 @@ import drone.disturbance_model
 import drone.utils as utils
 import drone.parameters
 import sim_logger
-import scenario_factory
+import scenario
 
 class Engine:
     """Core looping mechanism of simulation. Coordinates controller, trajectory and dynamics model.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, scenario: scenario.Scenario) -> None:
+        self.scenario = scenario
         self.t = 0.0    # simulation epoch time
         self.dt_log = 0.01  # simulation step to log output
         self.dt_controller = 0.01   # controller cycle time
-        self.dt_dynamics = 0.005    # dynamics model cycle time
+        self.dt_dynamics = self.scenario.dynamics.dt    # dynamics model cycle time
         # controller steps per log step, must be an integer
         self.cl_ratio = round(self.dt_log/self.dt_controller)
         # dynamics steps per controller step, must be an integer
@@ -27,15 +28,7 @@ class Engine:
         print("number of controller steps per simulation step: " + str(self.cl_ratio))
         print("number of dynamics model steps per controller step: " +
               str(self.dc_ratio))
-        
-        self.scenario = scenario_factory.Factory.make_scenario(
-            drone.trajectory.RandomWaypoints(300, True),
-            # drone.trajectory.CircleYZ(),
-            # drone.trajectory.Hover(),
-            drone.parameters.PennStateARILab550(),
-            drone.propeller.apc_8x6,
-            drone.disturbance_model.WindEffectNearWall(),
-            self.dt_dynamics)
+
         '''
         data to plot
         '''
