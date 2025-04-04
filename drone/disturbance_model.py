@@ -166,11 +166,11 @@ class WallEffect(DisturbanceForce):
 class WindEffectNearWall(DisturbanceForce):
     """This model integrates flow pass a vertical wall and the inflow model of propeller. It simulates wind velocity field around a wall and its impact on drone rotors.
     """
-    def __init__(self, wall_origin=np.array([-0.5, 0, 0]), wall_norm=np.array([1, 0, 0]), wall_length=4.0) -> None:
+    def __init__(self, wall_origin=np.array([-0.5, 0, 0]), wall_norm=np.array([1, 0, 0]), wall_length=4.0, u_free=np.array([-5.0, 0.0, 0.0])) -> None:
         super().__init__()
         self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6")
         self.wind_field_model = flow_pass_flat_plate.FlowPassFlatPlate.Interface(wall_norm, wall_origin, wall_length)
-        self.u_free = np.array([-5.0, 0.0, 0.0])    # in FLU inertial frame
+        self.u_free = u_free    # in FLU inertial frame
 
     def update_explicit_wrench(self, t: float, state: dynamics_state.State, rotor_set: rotor.RotorSet, force_control, torque_control) -> None:
         """WARNING: To be tested
