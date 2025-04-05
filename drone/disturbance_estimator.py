@@ -6,6 +6,10 @@ from learning import trainer
 
 class UnitDisturbance:
     """disturbance in a single dimension
+    According to the paper, "We found that the three components of the wind-effect force, 
+    fx fy fz, are highly correlated and sharing common features, 
+    so we use asthe basis function for all the component. ", this class can be applied to fx fy fz. 
+    Irrationally, we're also using it to estimate torque—even though torque isn't part of the network's training.
     """
     def __init__(self, num_of_kernels, dt: float) -> None:
         self.disturbance = 0

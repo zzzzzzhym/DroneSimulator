@@ -62,7 +62,10 @@ class ModelConfig:
         """consider to change pwm to force input or directly use F + T without conversion
         (v_0 v_1 v_2 q_0 q_1 q_2 q_3 pwm_0 pwm_1 pwm_2 pwm_3)
         velocity (3) + quaternion (4) + input (4) = 11
-        number of features (not necessarily the same as dim of disturbance forces)"""
+        number of features (not necessarily the same as dim of disturbance forces)
+        dim_of_label: dimension of label vector. Because we are trying to compare the disturbance force in x y z direction,
+        the label vector is a 3-dim vector, in the paper, disturbance torque is not estimated.
+        """
         self.phi_net = self.PhiNet(dim_of_input=dim_of_input, dim_of_output=dim_of_feature)
         self.h_net = self.HNet(dim_of_input=dim_of_feature, dim_of_output=num_of_conditions)
         self.trainer = self.Trainer
