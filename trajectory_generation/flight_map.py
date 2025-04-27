@@ -8,14 +8,14 @@ import trajectory_logger
 import common_utils.robust_pickle
 
 class FlightMap:
-    def __init__(self, subtrajs: list[trajectory_generator_qp.TrajectoryGenerator]) -> None:
+    def __init__(self, subtrajs: list[trajectory_generator_qp.TrajectoryGenerator], x_limit=None, y_limit=None, z_limit=None) -> None:
         self.subtraj_candidates = subtrajs
         self.subtraj_selected = []
         self.t_offset = np.array([0.0])
         self.coordinate_offset = [np.array([0.0, 0.0, 0.0])]
         self.num_of_subtrajs_in_use = 0
         self.total_time = 0.0
-        self.stitch_subtrajs()
+        self.stitch_subtrajs(x_limit, y_limit, z_limit)
 
     def read_data_by_time(self, t) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         t_clamped = np.clip(t, a_max=self.total_time, a_min=None)
@@ -67,6 +67,7 @@ class FlightMap:
         # compute the coordinate offset and time offset of each subtrajectory
         t_list = [0.0]
         self.coordinate_offset = [np.array([0.0, 0.0, 0.0])]    # initialize in case of redo stitching
+        self.subtraj_selected = []    # initialize in case of redo stitching
         for subtraj in self.subtraj_candidates:
             end_point = self.coordinate_offset[-1]+subtraj.waypoints.coordinates[-1]
             if (not self.check_out_of_bound(end_point[0], x_limit)) and \
@@ -89,18 +90,23 @@ class FlightMap:
     def plot_stitched_traj(self):
         t_span = np.arange(0, self.total_time, 0.1)
         fig, axs = plt.subplots(3, 5, sharex=True)
-        x_trace = np.empty((0, 3))
-        v_trace = np.empty((0, 3))
-        x_dot2_trace = np.empty((0, 3))
-        x_dot3_trace = np.empty((0, 3))
-        x_dot4_trace = np.empty((0, 3))
+        x_trace = []
+        v_trace = []
+        x_dot2_trace = []
+        x_dot3_trace = []
+        x_dot4_trace = []
         for t in t_span:
             x, v, x_dot2, x_dot3, x_dot4 = self.read_data_by_time(t)
-            x_trace = np.vstack((x_trace, x))
-            v_trace = np.vstack((v_trace, v))
-            x_dot2_trace = np.vstack((x_dot2_trace, x_dot2))
-            x_dot3_trace = np.vstack((x_dot3_trace, x_dot3))
-            x_dot4_trace = np.vstack((x_dot4_trace, x_dot4))
+            x_trace.append(x)
+            v_trace.append(v)
+            x_dot2_trace.append(x_dot2)
+            x_dot3_trace.append(x_dot3)
+            x_dot4_trace.append(x_dot4)
+        x_trace = np.array(x_trace)
+        v_trace = np.array(v_trace)
+        x_dot2_trace = np.array(x_dot2_trace)
+        x_dot3_trace = np.array(x_dot3_trace)
+        x_dot4_trace = np.array(x_dot4_trace)
         axs[0, 0].plot(t_span, x_trace[:, 0])
         axs[1, 0].plot(t_span, x_trace[:, 1])
         axs[2, 0].plot(t_span, x_trace[:, 2])
@@ -128,8 +134,8 @@ class FlightMap:
         fig1, axs1 = plt.subplots(1, 1, sharex=True)
         axs1 = fig1.add_subplot(111, projection='3d')
         axs1.plot3D(x_trace[:, 0], x_trace[:, 1], x_trace[:, 2])
-        for point in self.coordinate_offset:
-            axs1.plot3D(point[0], point[1], point[2], 'o', c='green', label='Points')
+        points = np.array(self.coordinate_offset)
+        axs1.scatter(points[:, 0], points[:, 1], points[:, 2], color='green', label='Stitch Points')
         axs1.set_xlabel('X')
         axs1.set_ylabel('Y')
         axs1.set_zlabel('Z')
@@ -181,7 +187,7 @@ def read_flight_map(file_name: str) -> FlightMap:
     else:
         raise ValueError("File not exist: " + relative_path)
         
-def construct_map_with_subtrajs(is_random=True, num_of_subtrajs: int=0, subtraj_id: list[int]=[]) -> FlightMap:
+def construct_map_with_subtrajs(is_random=True, num_of_subtrajs: int=0, subtraj_id: list[int]=[], x_limit=None, y_limit=None, z_limit=None) -> FlightMap:
     subtrajs = []
     if is_random:
         for i in range(num_of_subtrajs):
@@ -191,7 +197,7 @@ def construct_map_with_subtrajs(is_random=True, num_of_subtrajs: int=0, subtraj_
         for i in subtraj_id:
             file_name = trajectory_logger.pick_a_trajectory(i)
             subtrajs.append(trajectory_logger.read_trajectory(file_name))
-    return FlightMap(subtrajs)
+    return FlightMap(subtrajs, x_limit, y_limit, z_limit)
 
 
 if __name__ == "__main__":

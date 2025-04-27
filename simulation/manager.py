@@ -2,6 +2,8 @@ import scenario_factory
 import engine
 import sim_logger
 import plotter
+import numpy as np
+
 import drone.trajectory
 import drone.propeller
 import drone.disturbance_model
@@ -15,13 +17,14 @@ class Manager:
         self.engine = None
 
     def set_up(self, 
-               trajectory=drone.trajectory.RandomWaypoints(300, True, True),    # when test training effect, we may want to use random subtrajectory set
+            #    trajectory=drone.trajectory.RandomWaypoints(300, True, True),    # when test training effect, we may want to use random subtrajectory set
+               trajectory=drone.trajectory.RandomWaypointsInConstrainedSpace(200, False), 
             #    trajectory=drone.trajectory.RandomWaypoints(300, True), 
             #    trajectory= drone.trajectory.CircleYZ(),
             #    trajectory= drone.trajectory.Hover(),
                drone_params=drone.parameters.PennStateARILab550(), 
                propeller_params=drone.propeller.apc_8x6, 
-               disturbance_model=drone.disturbance_model.WindEffectNearWall(),
+               disturbance_model=drone.disturbance_model.WindEffectNearWall(u_free=np.array([-10.0, 0.0, 0.0])),
                dt_dynamics=0.005) -> None:
         self.scenario = scenario_factory.Factory.make_scenario(
             trajectory, 

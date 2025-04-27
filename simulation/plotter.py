@@ -15,7 +15,7 @@ class Plotter:
         # self.plot_position_and_derivatives(logger_output)
         # self.plot_omega_and_derivatives(logger_output)
         # self.plot_pose_and_derivatives(logger_output)
-        ## self.plot_trajectory(logger_output)
+        self.plot_trajectory(logger_output)
         # self.plot_quaternion(logger_output)
         self.plot_force_and_torque(logger_output)
         self.plot_position_tracking_error(logger_output)

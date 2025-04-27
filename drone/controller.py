@@ -35,6 +35,8 @@ class DroneController:
         self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
         self.f_disturb_base = np.array([0.0, 0.0, 0.0])
         self.torque_disturb_base = np.array([0.0, 0.0, 0.0])
+        self.is_using_baseline_disturbance_estimator = False
+        self.is_using_any_disturbance_estimator = False
 
     def step_controller(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference):
         self.step_tracking_error(state, ref)
@@ -102,7 +104,11 @@ class DroneController:
         e3 = np.array([0.0, 0.0, 1.0])
         self.f_d = (-params.Control.k_x*self.e_x - params.Control.k_v *
                      self.e_v - self.params.m*params.Environment.g*e3 + self.params.m*ref.x_d_dot2)
-        self.f_d += -state.state.pose@self.f_disturb # add disturbance force
+        if self.is_using_any_disturbance_estimator:
+            if self.is_using_baseline_disturbance_estimator:
+                self.f_d += -state.state.pose@self.f_disturb_base # add disturbance force
+            else:
+                self.f_d += -state.state.pose@self.f_disturb # add disturbance force
         if np.abs(self.f_d@self.f_d) < 0.0001:
             print('Warning: DroneController: f_d too close to 0')
             self.f_d = -0.0001*e3    # z positive points down
