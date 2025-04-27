@@ -443,7 +443,10 @@ class Plotter:
         axs[1].set_ylabel("f_motor_1")
         axs[2].set_ylabel("f_motor_2")
         axs[3].set_ylabel("f_motor_3")
-        axs[4].plot(self.t_span, logger["rotor_spd"])
+        axs[4].plot(self.t_span, logger["rotor_0_rotation_spd"])
+        axs[4].plot(self.t_span, logger["rotor_1_rotation_spd"])
+        axs[4].plot(self.t_span, logger["rotor_2_rotation_spd"])
+        axs[4].plot(self.t_span, logger["rotor_3_rotation_spd"])
         axs[4].set_ylabel("rotor_spd [RPM]")
 
     def plot_omega_desired(self, logger: np.ndarray):

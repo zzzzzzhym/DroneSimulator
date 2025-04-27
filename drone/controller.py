@@ -29,7 +29,7 @@ class DroneController:
         self.f_d_dot = np.array([0.0, 0.0, 0.0])
         self.psi_r_rd = 0.0 # debug use only
         self.force_motor = np.array([0.0, 0.0, 0.0, 0.0])
-        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wall_effect", 0.01)
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test", 0.01)
         self.f_disturb = np.array([0.0, 0.0, 0.0])
         self.torque_disturb = np.array([0.0, 0.0, 0.0])        
         self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
@@ -50,12 +50,44 @@ class DroneController:
     def step_disturbance_estimator(self, state: dynamics.DroneDynamics):
         # tracking_error = np.zeros(6)  # assume no tracking error term in disturbance estimator
         tracking_error = np.hstack((self.e_v, np.zeros(3)))
-        self.disturbance_estimator.step_disturbance(state.state.v, state.state.q, self.force_motor, self.get_disturbance(state), tracking_error)
-        self.f_disturb = np.array([self.disturbance_estimator.f_x.disturbance, self.disturbance_estimator.f_y.disturbance, self.disturbance_estimator.f_z.disturbance])
-        self.torque_disturb = np.array([self.disturbance_estimator.tq_x.disturbance, self.disturbance_estimator.tq_y.disturbance, self.disturbance_estimator.tq_z.disturbance])
-        self.baseline_disturbance_estimator.step_disturbance(self.get_disturbance(state), tracking_error)
-        self.f_disturb_base = np.array([self.baseline_disturbance_estimator.f_x.disturbance, self.baseline_disturbance_estimator.f_y.disturbance, self.baseline_disturbance_estimator.f_z.disturbance])
-        self.torque_disturb_base = np.array([self.baseline_disturbance_estimator.tq_x.disturbance, self.baseline_disturbance_estimator.tq_y.disturbance, self.baseline_disturbance_estimator.tq_z.disturbance])
+        self.disturbance_estimator.step_disturbance(
+            state.state.position,
+            state.state.v,
+            state.state.q,
+            state.state.omega,
+            self.f[2],
+            self.torque,
+            np.array([state.rotors.rotors[0].rotation_speed, 
+                      state.rotors.rotors[1].rotation_speed, 
+                      state.rotors.rotors[2].rotation_speed, 
+                      state.rotors.rotors[3].rotation_speed]),
+            self.get_disturbance(state),
+            tracking_error
+        )
+        self.f_disturb = np.array([
+            self.disturbance_estimator.f_x.disturbance,
+            self.disturbance_estimator.f_y.disturbance,
+            self.disturbance_estimator.f_z.disturbance
+        ])
+        self.torque_disturb = np.array([
+            self.disturbance_estimator.tq_x.disturbance,
+            self.disturbance_estimator.tq_y.disturbance,
+            self.disturbance_estimator.tq_z.disturbance
+        ])
+        self.baseline_disturbance_estimator.step_disturbance(
+            self.get_disturbance(state),
+            tracking_error
+        )
+        self.f_disturb_base = np.array([
+            self.baseline_disturbance_estimator.f_x.disturbance,
+            self.baseline_disturbance_estimator.f_y.disturbance,
+            self.baseline_disturbance_estimator.f_z.disturbance
+        ])
+        self.torque_disturb_base = np.array([
+            self.baseline_disturbance_estimator.tq_x.disturbance,
+            self.baseline_disturbance_estimator.tq_y.disturbance,
+            self.baseline_disturbance_estimator.tq_z.disturbance
+        ])
 
     def get_disturbance(self, state: dynamics.DroneDynamics):
         """Distrubance force in body frame"""
