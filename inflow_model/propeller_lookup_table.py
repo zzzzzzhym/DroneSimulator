@@ -35,11 +35,14 @@ class PropellerLookupTable:
         def get_interpolator(self):
             self.interpolator = RegularGridInterpolator((self.u_free_x_range, self.pitch_range, self.omega_range), self.table)
 
+        def get_controller_interpolator(self):
+            self.controller_interpolator = RegularGridInterpolator((self.u_free_x_range, self.pitch_range, self.table), self.omega_range)
+
         def load_lookup_table(self, filename: str):
             self.read_data(filename)
             self.get_interpolator()
 
-        def query_forces_from_table(self, u_free_x: float, pitch: float, omega: float):
+        def query_data_from_table(self, u_free_x: float, pitch: float, omega: float):
             """The forces are in the disk frame setup in the lookup table. It's z axis is the rotor axis, x axis is the free stream direction. The actual rotor frame may be different from this frame.
 
             Args:
@@ -74,12 +77,16 @@ class PropellerLookupTable:
                 x_axis = u_relative_wind / u_relative_norm
                 matrix_from_inertial_to_lookup_table, matrix_from_lookup_table_to_inertial = PropellerLookupTable.Reader.get_rotation_matrix_between_inertial_and_lookup_table_frame(x_axis, r_disk)
                 pitch = PropellerLookupTable.Reader.get_pitch_angle(r_disk, matrix_from_inertial_to_lookup_table)
-            forces_in_lookup_table_disk_frame = self.query_forces_from_table(u_relative_norm, pitch, omega)
+            queried_data = self.query_data_from_table(u_relative_norm, pitch, omega)
+            forces_in_lookup_table_disk_frame = queried_data[:3]  # f_x, f_y, f_z
+            v_i_in_lookup_table_disk_frame = np.array([0.0, 0.0, -queried_data[3]])
             if not is_ccw_blade:
                 forces_in_lookup_table_disk_frame[1] *= -1  # because wind is always in the x direction, flip y is enough to mirror ccw to cw
-            forces_in_lookup_table_frame = PropellerLookupTable.Reader.convert_force_from_table_disk_to_table(pitch, forces_in_lookup_table_disk_frame)
+            forces_in_lookup_table_frame = PropellerLookupTable.Reader.convert_vector_from_table_disk_to_table(pitch, forces_in_lookup_table_disk_frame)
             forces_in_inertial_frame = matrix_from_lookup_table_to_inertial @ forces_in_lookup_table_frame
-            return forces_in_inertial_frame
+            v_i_in_lookup_table_frame = PropellerLookupTable.Reader.convert_vector_from_table_disk_to_table(pitch, v_i_in_lookup_table_disk_frame)
+            v_i_in_inertial_frame = matrix_from_lookup_table_to_inertial @ v_i_in_lookup_table_frame
+            return forces_in_inertial_frame, v_i_in_inertial_frame
         
         @staticmethod
         def get_rotation_matrix_between_inertial_and_lookup_table_frame(x_axis_by_wind: np.ndarray, r_disk: np.ndarray):
@@ -113,7 +120,7 @@ class PropellerLookupTable:
             return pitch
         
         @staticmethod
-        def convert_force_from_table_disk_to_table(pitch: float, force_in_table_disk: np.ndarray):
+        def convert_vector_from_table_disk_to_table(pitch: float, force_in_table_disk: np.ndarray):
             """Convert the force from the rotor disk frame to the lookup table frame. 
 
             Args:
@@ -129,13 +136,15 @@ class PropellerLookupTable:
             return matrix_from_disk_to_table @ force_in_table_disk
         
         @staticmethod
-        def plot_rotor_force(r_disk: np.ndarray, force: np.ndarray):
+        def plot_rotor_force(r_disk: np.ndarray, force: np.ndarray, v_i: np.ndarray):
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
             ax.quiver(0, 0, 0, r_disk[0, 0], r_disk[1, 0], r_disk[2, 0], color='r', linestyle='dashed')
             ax.quiver(0, 0, 0, r_disk[0, 1], r_disk[1, 1], r_disk[2, 1], color='g', linestyle='dashed')
             ax.quiver(0, 0, 0, r_disk[0, 2], r_disk[1, 2], r_disk[2, 2], color='b', linestyle='dashed')
-            ax.quiver(0, 0, 0, force[0], force[1], force[2], color='orange')
+            ax.quiver(0, 0, 0, force[0], force[1], force[2], color='orange', label='Force')
+            ax.quiver(0, 0, 0, v_i[0], v_i[1], v_i[2], color='purple', label='Induced Velocity')
+            ax.legend()
             limit = 2
             ax.set_xlim([-limit, limit])
             ax.set_ylim([-limit, limit])
@@ -174,11 +183,11 @@ class PropellerLookupTable:
                                         u_free_x_range: Optional[np.ndarray] = None, 
                                         pitch_range: Optional[np.ndarray] = None):
             
-            blade = blade if blade is not None else blade_params.apc_8x6()
-            omega_range = omega_range if omega_range is not None else np.array(PropellerLookupTable._DEFAULT_OMEGA_RANGE)
-            u_free_x_range = u_free_x_range if u_free_x_range is not None else np.array(PropellerLookupTable._DEFAULT_U_FREE_X_RANGE)
-            pitch_range = pitch_range if pitch_range is not None else np.array(PropellerLookupTable._DEFAULT_PITCH_RANGE)
-            table = np.zeros((len(u_free_x_range), len(pitch_range), len(omega_range), 3))   # 3 for forces in x, y, z directions
+            blade = blade if blade is not None else blade_params.APC_8x6()
+            omega_range = omega_range if omega_range is not None else np.array(PropellerLookupTable.Maker._DEFAULT_OMEGA_RANGE)
+            u_free_x_range = u_free_x_range if u_free_x_range is not None else np.array(PropellerLookupTable.Maker._DEFAULT_U_FREE_X_RANGE)
+            pitch_range = pitch_range if pitch_range is not None else np.array(PropellerLookupTable.Maker._DEFAULT_PITCH_RANGE)
+            table = np.zeros((len(u_free_x_range), len(pitch_range), len(omega_range), 4))   # 4 for f_x, f_y, f_z, v_i
 
             print("[PropellerLookupTable] Making lookup table:")
             print("Omega range:", omega_range)
@@ -191,23 +200,17 @@ class PropellerLookupTable:
                 u_free = np.array([u_free_x, 0, 0])
                 for j, r_disk in enumerate(r_disk_range):
                     for k, omega in enumerate(omega_range):
-                        f_x, f_y, f_z = bet_instance.get_rotor_forces(u_free, v_forward, r_disk, omega, is_ccw_blade=True)
-                        table[i, j, k, :] = [f_x, f_y, f_z]
-                        print(f"u_free_x: {u_free_x}, pitch: {np.rad2deg(pitch_range[j])}, omega: {omega}, forces: {f_x, f_y, f_z}")
+                        f_x, f_y, f_z, v_i = bet_instance.get_rotor_forces(u_free, v_forward, r_disk, omega, is_ccw_blade=True)
+                        table[i, j, k, :] = [f_x, f_y, f_z, v_i]
+                        print(f"u_free_x: {u_free_x:.4f}, pitch: {np.rad2deg(pitch_range[j]):.4f}, omega: {omega:.4f}, forces: ({f_x:.4f}, {f_y:.4f}, {f_z:.4f}), v_i: {v_i:.4f}")
             PropellerLookupTable.Maker.save_data(filename, u_free_x_range, pitch_range, omega_range, table)
 
         @staticmethod
         def save_data(filename: str, u_free_x_range: np.ndarray, pitch_range: np.ndarray, omega_range: np.ndarray, table: np.ndarray):
             file_path = os.path.join(os.path.dirname(__file__), "lookup_table", filename + ".yaml")
-            print("Saving data to", file_path)
+            print("Saving data to", os.path.relpath(file_path, os.getcwd()))
             data = {"omega_range": omega_range.tolist(), "u_free_x_range": u_free_x_range.tolist(), "pitch_range": pitch_range.tolist(), "table": table.tolist()}
             with open(file_path, 'w') as file:
                 yaml.dump(data, file)
         
-
-if __name__ == "__main__":
-
-    # PropellerLookupTable.Maker.make_propeller_lookup_table("apc_8x6")
-    PropellerLookupTable.Maker.make_propeller_lookup_table("apc_8x6_simple", blade_params.apc_8x6(), np.array(PropellerLookupTable.Maker._DEFAULT_OMEGA_RANGE[6:8]), np.array(
-        PropellerLookupTable.Maker._DEFAULT_U_FREE_X_RANGE[8:9]), np.array(PropellerLookupTable.Maker._DEFAULT_PITCH_RANGE[5:7]))
     

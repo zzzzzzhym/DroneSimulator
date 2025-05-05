@@ -6,12 +6,12 @@ from propeller_lookup_table import PropellerLookupTable
 class TestPropellerLookupTableReader(unittest.TestCase):
     def test_read_data(self):
         # check if the parameters are set correctly
-        instance = PropellerLookupTable.Reader("apc_8x6")
+        instance = PropellerLookupTable.Reader("apc_8x6_with_trail")
         np.testing.assert_array_equal(instance.omega_range, PropellerLookupTable.Maker._DEFAULT_OMEGA_RANGE)
         np.testing.assert_array_equal(instance.u_free_x_range, PropellerLookupTable.Maker._DEFAULT_U_FREE_X_RANGE)
         np.testing.assert_array_equal(instance.pitch_range, PropellerLookupTable.Maker._DEFAULT_PITCH_RANGE)
         # check if the table has the correct shape
-        expected_shape = (len(instance.u_free_x_range), len(instance.pitch_range), len(instance.omega_range), 3)
+        expected_shape = (len(instance.u_free_x_range), len(instance.pitch_range), len(instance.omega_range), 4)
         self.assertEqual(instance.table.shape, expected_shape)
 
     def test_get_rotation_matrix_between_inertial_and_lookup_table_frame(self):
@@ -73,13 +73,13 @@ class TestPropellerLookupTableReader(unittest.TestCase):
         self.assertAlmostEqual(pitch, 0.0)
 
     def test_get_rotor_forces(self):
-        instance = PropellerLookupTable.Reader("apc_8x6")
+        instance = PropellerLookupTable.Reader("apc_8x6_with_trail")
         u_free = 0.0
         v_forward = 0.0
         r_disk = np.eye(3)
         omega = 0.0
         is_ccw_blade = True
-        forces_in_inertial_frame = instance.get_rotor_forces(u_free, v_forward, r_disk, omega, is_ccw_blade)
+        forces_in_inertial_frame, _ = instance.get_rotor_forces(u_free, v_forward, r_disk, omega, is_ccw_blade)
         np.testing.assert_array_almost_equal(forces_in_inertial_frame, np.array([0.0, 0.0, 0.0]))
 
 
