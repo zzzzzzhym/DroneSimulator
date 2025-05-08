@@ -35,8 +35,44 @@ class PropellerLookupTable:
         def get_interpolator(self):
             self.interpolator = RegularGridInterpolator((self.u_free_x_range, self.pitch_range, self.omega_range), self.table)
 
-        def get_controller_interpolator(self):
-            self.controller_interpolator = RegularGridInterpolator((self.u_free_x_range, self.pitch_range, self.table), self.omega_range)
+        def query_rotation_speed(self, u_free_x: float, pitch: float, omega_current:float, thrust_desired: float):
+            """From the controller perspective, the lookup table need to query rotation speed given required thrust."""
+            # construct a omega-thrust table
+            thrust_range = np.zeros(len(self.omega_range))
+            for i, omega in enumerate(self.omega_range):
+                queried_data = self.query_data_from_table(u_free_x, pitch, omega)
+                f_z = queried_data[2]  # f_z is thrust in the lookup table frame
+                thrust_range[i] = f_z
+
+            thrust_min = np.min(thrust_range)
+            thrust_max = np.max(thrust_range)
+            thrust_clipped = np.clip(thrust_desired, thrust_min, thrust_max)  # clip thrust to the range of the table
+
+            # Step 2: Find all bracket intervals and interpolate omega
+            candidates = []
+            for i in range(len(self.omega_range) - 1):
+                thrust_left = thrust_range[i]
+                thrust_right = thrust_range[i + 1]
+                if (thrust_left - thrust_clipped) * (thrust_right - thrust_clipped) <= 0:
+                    if abs(thrust_left - thrust_right) > 1e-3:
+                        ratio = (thrust_clipped - thrust_left) / (thrust_right - thrust_left)
+                        omega_interp = self.omega_range[i] + ratio * (self.omega_range[i + 1] - self.omega_range[i])
+                        candidates.append(omega_interp)
+                    else:   # thrust_left and thrust_right are very close, see if we can use omega_current or put the closest one as candidate
+                        if omega_current < self.omega_range[i]:
+                            candidates.append(self.omega_range[i])
+                        elif omega_current > self.omega_range[i + 1]:
+                            candidates.append(self.omega_range[i + 1])
+                        else:
+                            candidates.append(omega_current)
+
+            # Step 3: Choose the one closest to omega_current
+            if not candidates:
+                raise ValueError(f"Cannot find a valid omega for thrust {thrust_desired} in the range [{thrust_min}, {thrust_max}]")
+            closest = min(candidates, key=lambda omega: abs(omega - omega_current))
+            print(f"candidates: {candidates}, closest: {closest}, omega_current: {omega_current}, thrust_desired: {thrust_desired}")
+            return closest
+
 
         def load_lookup_table(self, filename: str):
             self.read_data(filename)
