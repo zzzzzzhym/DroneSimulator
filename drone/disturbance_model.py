@@ -169,7 +169,8 @@ class WindEffectNearWall(DisturbanceForce):
         self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6_with_trail")
         self.wind_field_model = flow_pass_flat_plate.FlowPassFlatPlate.Interface(wall_norm, wall_origin, wall_length)
         self.u_free = u_free    # in FLU inertial frame
-        self.v_i = np.zeros(3)  # relative wind velocity in inertial frame
+        self.v_i_average = np.zeros(3)  # average downwash in inertial frame
+        
 
     def update_explicit_wrench(self, t: float, state: dynamics_state.State, rotor_set: rotor.RotorSet, force_control, torque_control) -> None:
         """WARNING: To be tested
@@ -182,6 +183,10 @@ class WindEffectNearWall(DisturbanceForce):
         induced_flows = []
         for rotor in rotor_set.rotors:
             wind_velocity = self.wind_field_model.get_solution(self.u_free, rotor.position_inertial_frame)
+            # even though rotor pose is in frd frame, the pose in flu is the same:
+            # pose_z_down_frd is the pose defined with body z pointing down of disk, in a frd frame
+            # r_convert = np.diag([1, -1, -1]), pose_z_down_flu = pose_z_down_frd@r_convert
+            # so pose_z_up_flu = pose_z_down_flu@r_convert = pose_z_down_frd
             force, v_i = self.propeller_force_table.get_rotor_forces(wind_velocity, rotor.velocity_inertial_frame, rotor.pose, rotor.rotation_speed, rotor.is_ccw_blade)
             forces.append(force)
             torques.append(np.cross(rotor.relative_position_inertial_frame, force))
@@ -199,13 +204,15 @@ class WindEffectNearWall(DisturbanceForce):
         # if np.linalg.norm(self.f_explicit) > 10 and t > 0.5:
         #     print(f"Wind effect: {self.f_explicit}")
         self.t_explicit[2] = 0.0    # the inflow model did not model torque in z axis
-        self.v_i = sum(induced_flows) / len(induced_flows)
+        self.v_i_average = sum(induced_flows) / len(induced_flows)
         self.f_explicit += self.get_disturbance_on_drone_body(state)  # add the air drag force on the drone body to the propeller force
+
+        # super().__init__()  #debug
 
     def get_disturbance_on_drone_body(self, state: dynamics_state.State) -> np.ndarray:
         v_local_wind = self.wind_field_model.get_solution(self.u_free, state.position)
         alpha = 0.1  # a magic number accounting the distance between drone body and the rotor
-        f = AirDrag.get_air_drag(self.v_i*alpha + v_local_wind - state.v)
+        f = AirDrag.get_air_drag(self.v_i_average*alpha + v_local_wind - state.v)
         return f
 
 class AggregatedDisturbanceForce(DisturbanceForce):

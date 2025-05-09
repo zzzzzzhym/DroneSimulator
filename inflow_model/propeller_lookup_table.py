@@ -12,9 +12,9 @@ import warnings
 class PropellerLookupTable:
     class Reader:
         def __init__(self, filename: str):
-            self.omega_range = None
-            self.u_free_x_range = None
-            self.pitch_range = None
+            self.omega_range = None # rad/s
+            self.u_free_x_range = None  # m/s
+            self.pitch_range = None # rad
             self.table = None
             self.interp_func = None   
             self.max_allowed_extrapolation = 1e-3  
@@ -70,9 +70,33 @@ class PropellerLookupTable:
             if not candidates:
                 raise ValueError(f"Cannot find a valid omega for thrust {thrust_desired} in the range [{thrust_min}, {thrust_max}]")
             closest = min(candidates, key=lambda omega: abs(omega - omega_current))
-            print(f"candidates: {candidates}, closest: {closest}, omega_current: {omega_current}, thrust_desired: {thrust_desired}")
             return closest
 
+        def get_rotation_speed(self, u_free: np.ndarray, v_forward: np.ndarray, r_disk: np.ndarray, omega_current:float, thrust_desired: float):
+            """Get the rotation speed of the rotor given the desired thrust. The lookup table is in the disk frame, so we need to convert the inertial frame to the disk frame.
+
+            Args:
+                u_free (np.ndarray): free stream velocity in inertial frame
+                v_forward (np.ndarray): forward velocity in inertial frame
+                r_disk (np.ndarray): rotor disk pose in inertial frame
+                omega_current (float): current rotation speed of the rotor in rad/s
+                thrust_desired (float): desired thrust
+
+            Returns:
+                float: rotation speed of the rotor in rad/s
+            """
+            u_relative_wind = u_free - v_forward
+            u_relative_norm = np.linalg.norm(u_relative_wind)
+            if u_relative_norm < 1e-6: # relative wind is close to zero
+                # use the rotor disk frame as the lookup table frame
+                matrix_from_inertial_to_lookup_table = r_disk.T
+                pitch = 0.0
+            else:
+                x_axis = u_relative_wind / u_relative_norm
+                matrix_from_inertial_to_lookup_table, matrix_from_lookup_table_to_inertial = PropellerLookupTable.Reader.get_rotation_matrix_between_inertial_and_lookup_table_frame(x_axis, r_disk)
+                pitch = PropellerLookupTable.Reader.get_pitch_angle(r_disk, matrix_from_inertial_to_lookup_table)
+            rotation_speed = self.query_rotation_speed(u_relative_norm, pitch, omega_current, thrust_desired)
+            return rotation_speed
 
         def load_lookup_table(self, filename: str):
             self.read_data(filename)
@@ -102,6 +126,18 @@ class PropellerLookupTable:
             return self.interpolator((u_free_x_clipped, pitch_clipped, omega_clipped))
         
         def get_rotor_forces(self, u_free: np.ndarray, v_forward: np.ndarray, r_disk: np.ndarray, omega: float, is_ccw_blade: bool):
+            """_summary_
+
+            Args:
+                u_free (np.ndarray): free stream velocity in inertial frame
+                v_forward (np.ndarray): forward velocity in inertial frame
+                r_disk (np.ndarray): rotor disk pose in inertial frame
+                omega (float): rotation speed of the rotor in rad/s
+                is_ccw_blade (bool): True if the blade rotates counter-clockwise from bird view (opposite to z axis body frame)
+
+            Returns:
+                _type_: _description_
+            """
             u_relative_wind = u_free - v_forward
             u_relative_norm = np.linalg.norm(u_relative_wind)
             if u_relative_norm < 1e-6: # relative wind is close to zero
@@ -150,6 +186,7 @@ class PropellerLookupTable:
                 
         @staticmethod
         def get_pitch_angle(r_disk: np.ndarray, matrix_from_inertial_to_lookup_table: np.ndarray):
+            """pitch in radian"""
             z_axis_of_disk_in_inertial = r_disk[:, 2]
             z_axis_of_disk_in_lookup_table = matrix_from_inertial_to_lookup_table @ z_axis_of_disk_in_inertial
             pitch = np.arctan2(z_axis_of_disk_in_lookup_table[0], z_axis_of_disk_in_lookup_table[2])
@@ -199,15 +236,15 @@ class PropellerLookupTable:
             Lookup table frame definition: the free stream is always in the x direciton. Direction of free stream and the rotor disk z axis forms the x-z plane.
             The lookup table only store the data for the counter-clockwise blade. The data for the clockwise blade can be obtained by flipping the sign of F_y, while keeping F_x and F_z the same.
         """
-        _DEFAULT_U_FREE_X_RANGE = (0, 1, 2, 3, 4, 5, 7, 10, 13, 15, 17, 20)
-        _DEFAULT_PITCH_RANGE = tuple(np.deg2rad([-90, -60, -45, -30, -15, 0, 15, 30, 45, 60, 90]))
-        _DEFAULT_OMEGA_RANGE = (0, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 2600)
+        _DEFAULT_U_FREE_X_RANGE = (0, 1, 2, 3, 4, 5, 7, 10, 13, 15, 17, 20) # m/s
+        _DEFAULT_PITCH_RANGE = tuple(np.deg2rad([-90, -60, -45, -30, -15, 0, 15, 30, 45, 60, 90]))  # rad
+        _DEFAULT_OMEGA_RANGE = (0, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000, 2600)  # rad/s
         
         def __init__(self):
             self.blade = None
-            self.omega_range = None
-            self.u_free_x_range = None
-            self.pitch_range = None
+            self.omega_range = None # rad/s
+            self.u_free_x_range = None  # m/s
+            self.pitch_range = None # rad
             self.table = None
             self.interp_func = None   
             self.max_allowed_extrapolation = 1e-3    

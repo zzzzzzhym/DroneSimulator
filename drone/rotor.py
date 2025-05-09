@@ -29,21 +29,27 @@ class Rotor:
         self.relative_position_body_frame = relative_position_body_frame             # rotor position relative to drone center in body frame
         self.relative_position_inertial_frame = np.zeros(3)         # rotor position relative to drone center in inertial frame
 
-    def step_rotor_states(self, drone_pose, drone_position_inertial_frame, drone_velocity_inertial_frame, omega_inertial_frame, thrust):
+    def step_rotor_states(self, drone_pose, drone_position_inertial_frame, drone_velocity_inertial_frame, omega_inertial_frame, speed):
         self.step_pose(drone_pose)
         self.step_relative_position_inertial_frame()
         self.step_center_position_in_inertial_frame(drone_position_inertial_frame)
         self.step_center_velocity_in_inertial_frame(drone_velocity_inertial_frame, omega_inertial_frame)
-        self.step_rotation_speed(thrust)
+        self.step_rotation_speed(speed)
 
     def step_pose(self, drone_pose):
-        """Rotor and drone has a relative pose."""
-        # get rotor relative pose to drone pose in FRD frame
+        """Directly assign drone pose in FRD frame to rotor pose in FLU frame.
+        even though rotor pose is in frd frame, the pose in flu is the same:
+        pose_z_down_frd is the pose defined with body z pointing down of disk, in a frd frame
+        r_convert = np.diag([1, -1, -1]), pose_z_down_flu = pose_z_down_frd@r_convert
+        so pose_z_up_flu = pose_z_down_flu@r_convert = pose_z_down_frd"""
+
         x = drone_pose[:, 0]    # 1D array
         y = -drone_pose[:, 1]   # 1D array
         z = -drone_pose[:, 2]   # 1D array
         # Then flip to FLU frame
         self.pose = np.vstack((x, y, z)).T
+        
+        # self.pose = drone_pose
 
     def step_relative_position_inertial_frame(self):
         self.relative_position_inertial_frame = self.pose@self.relative_position_body_frame
@@ -54,8 +60,8 @@ class Rotor:
     def step_center_velocity_in_inertial_frame(self, drone_velocity_inertial_frame, omega_inertial_frame):
         self.velocity_inertial_frame = drone_velocity_inertial_frame + np.cross(omega_inertial_frame, self.relative_position_inertial_frame)
 
-    def step_rotation_speed(self, thrust):
-        self.rotation_speed = utils.convert_rpm_to_radps(self.propeller.get_rotation_speed(thrust))
+    def step_rotation_speed(self, speed):
+        self.rotation_speed = speed
     
 class RotorSet:
     """This class manage the collection of all rotors on the drone."""    
@@ -66,19 +72,19 @@ class RotorSet:
             for position, blade in zip(self.params.rotor_position, self.params.is_ccw_blade)
         ]
 
-    def step_rotor_states(self, drone_state: state, thrusts):
+    def step_rotor_states(self, drone_state: state, rotation_speeds: np.ndarray) -> None:
         """_summary_
 
         Args:
             drone_state (state): drone state in FRD frame
             thrusts (_type_): vector of thrusts from each rotor. Note that a thrust is a scalar value
         """
-        for rotor, thrust in zip(self.rotors, thrusts): 
-            rotor.step_rotor_states(utils.FrdFluConverter.flip(drone_state.get_pose_in_inertial_frame()),  
+        for rotor, speed in zip(self.rotors, rotation_speeds): 
+            rotor.step_rotor_states(utils.FrdFluConverter.flip(drone_state.get_pose_in_inertial_frame()),  # drone_state.get_pose_in_inertial_frame(),  
                                     utils.FrdFluConverter.flip(drone_state.get_position_in_inertial_frame()),
                                     utils.FrdFluConverter.flip(drone_state.get_velocity_in_inertial_frame()),
                                     utils.FrdFluConverter.flip(drone_state.get_omega_in_inertial_frame()),
-                                    thrust)
+                                    speed)
     
 
 

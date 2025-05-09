@@ -40,12 +40,15 @@ class Engine:
         for i in range(self.cl_ratio):
             t_controller += i*self.dt_controller
             self.scenario.trajectory.step_reference_state(self.t)
-            self.scenario.dynamics.f = self.scenario.controller.f
-            self.scenario.dynamics.torque = self.scenario.controller.torque
             t_dynamics = t_controller
             for j in range(self.dc_ratio):
                 t_dynamics += j*self.dt_dynamics
-                self.scenario.dynamics.step_dynamics(t_dynamics)
+                self.scenario.dynamics.step_dynamics(
+                    t_dynamics, 
+                    self.scenario.controller.f, 
+                    self.scenario.controller.torque, 
+                    self.scenario.controller.rotation_speed
+                )
             self.scenario.controller.step_controller(
                 self.scenario.dynamics, self.scenario.trajectory)
             self.t += self.dt_controller
@@ -78,7 +81,7 @@ class Engine:
             logger.buffer["v_d"].append(self.scenario.trajectory.v_d)
             logger.buffer["x_d_dot2"].append(self.scenario.trajectory.x_d_dot2)
             logger.buffer["x_d_dot3"].append(self.scenario.trajectory.x_d_dot3)
-            logger.buffer["f_motor"].append(self.scenario.controller.force_motor)
+            logger.buffer["f_motor"].append(self.scenario.controller.force_motor_desired)
             logger.buffer["f_disturb"].append(self.scenario.dynamics.f_disturb)
             logger.buffer["f_disturb_est"].append(self.scenario.controller.f_disturb)
             logger.buffer["f_disturb_est_base"].append(self.scenario.controller.f_disturb_base)
