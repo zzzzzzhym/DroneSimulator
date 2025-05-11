@@ -257,3 +257,45 @@ rotor_3_velocity:
   is_label: false
 b_1d:
   components: []
+f_feedback:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: false
+  is_label: false
+f_feedforward:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: false
+  is_label: false
+f_disturb_compensation:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: false
+  is_label: false
+torque_feedback:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: false
+  is_label: false
+torque_coriolis:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: false
+  is_label: false
+torque_feedforward:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: false
+  is_label: false

@@ -214,6 +214,7 @@ class Trainer:
                     "h": self.h_net.state_dict(),
                     "config": self.gather_model_config()}, 
                     file_path)
+        print(f"Model saved to {os.path.relpath(file_path, os.getcwd())}")
         
     def gather_model_config(self):
         """Extract model configuration from the model factory and data manager for later reconstruct the model in application.

@@ -87,7 +87,6 @@ class UnitDisturbance:
         i_p = np.eye(p.shape[0])    # identity matrix of the same size as p
         p_new = (i_p - k @ phi) @ p @ (i_p - k @ phi).T + k @ r @ k.T + q * dt  # add Q over dt
 
-
         return a_hat_new, p_new     
 
     def step_estimator(self, kernel: np.ndarray, measured_disturbance: np.ndarray, tracking_error: np.ndarray) -> None:

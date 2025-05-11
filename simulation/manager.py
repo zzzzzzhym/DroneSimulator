@@ -1,9 +1,9 @@
-import scenario_factory
-import engine
-import sim_logger
 import plotter
 import numpy as np
 
+import scenario_factory
+import engine
+import sim_logger
 import drone.trajectory
 import drone.propeller
 import drone.disturbance_model
@@ -15,6 +15,7 @@ class Manager:
         self.logger = sim_logger.Logger()
         self.scenario = None
         self.engine = None
+        self.result = None
 
     def set_up(self, 
             #    trajectory=drone.trajectory.RandomWaypoints(300, True, True),    # when test training effect, we may want to use random subtrajectory set
@@ -33,16 +34,16 @@ class Manager:
             propeller_params, 
             disturbance_model,
             dt_dynamics)
-        self.engine = engine.Engine(self.scenario)
+        self.engine = engine.Engine(self.scenario)        
 
     def run(self, t_end: float) -> None:
         self.engine.run_simulation(self.logger, t_end)
         self.logger.convert_buffer_to_output()
+        self.result = plotter.Plotter(self.engine.t_span, self.engine.dt_log)
 
     def save_result(self, file_name: str) -> None:
         self.logger.log_sim_result(file_name)
 
     def plot(self) -> None:
-        result = plotter.Plotter(self.engine.t_span, self.engine.dt_log)
-        result.make_plots(self.logger.output)
+        self.result.make_plots(self.logger.output)
         

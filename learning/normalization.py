@@ -5,7 +5,7 @@ class Normalization:
         self.mean = 0.0
         self.m2 = 0.0   # variance * count (the "total variance" before average)
         self.count = 0  # number of samples seen so far
-        self.threshold = 1e-12  # threshold for variance to treat the data as constant
+        self.threshold = 1e-6  # threshold for variance to treat the data as constant
 
     def add_batch(self, data: np.ndarray) -> None:
         """Calculate the mean and standard deviation after feed in a single batch of data.

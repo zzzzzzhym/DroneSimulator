@@ -1,13 +1,6 @@
 import numpy as np
 
-import drone.trajectory
-import drone.dynamics
-import drone.dynamics_state
-import drone.controller
-import drone.propeller
-import drone.disturbance_model
 import drone.utils as utils
-import drone.parameters
 import sim_logger
 import scenario
 
@@ -74,7 +67,13 @@ class Engine:
             logger.buffer["f_d"].append(self.scenario.controller.f_d)
             logger.buffer["f_d_dot"].append(self.scenario.controller.f_d_dot)
             logger.buffer["f_d_dot2"].append(self.scenario.controller.f_d_dot2)
+            logger.buffer["f_feedback"].append(self.scenario.controller.f_feedback)
+            logger.buffer["f_feedforward"].append(self.scenario.controller.f_feedforward)
+            logger.buffer["f_disturb_compensation"].append(self.scenario.controller.f_disturb_compensation)
             logger.buffer["torque_ctrl_input"].append(self.scenario.controller.torque)
+            logger.buffer["torque_feedback"].append(self.scenario.controller.torque_feedback)
+            logger.buffer["torque_coriolis"].append(self.scenario.controller.torque_coriolis)
+            logger.buffer["torque_feedforward"].append(self.scenario.controller.torque_feedforward)
             logger.buffer["x_d"].append(self.scenario.trajectory.x_d)
             logger.buffer["v_d"].append(self.scenario.trajectory.v_d)
             logger.buffer["x_d_dot2"].append(self.scenario.trajectory.x_d_dot2)

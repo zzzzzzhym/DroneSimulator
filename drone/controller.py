@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 
 import utils
 import dynamics
@@ -33,6 +34,7 @@ class DroneController:
         self.force_motor_desired = np.array([0.0, 0.0, 0.0, 0.0])
         self.force_motor_available = np.array([0.0, 0.0, 0.0, 0.0])
         self.rotation_speed = np.array([0.0, 0.0, 0.0, 0.0])
+        # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test_inflow", 0.01)
         self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test", 0.01)
         self.f_disturb = np.array([0.0, 0.0, 0.0])
         self.torque_disturb = np.array([0.0, 0.0, 0.0])        
@@ -42,16 +44,39 @@ class DroneController:
         self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6_with_trail")
         self.propeller = propeller.apc_8x6
         self.is_warmed_up = False
-        self.is_using_baseline_disturbance_estimator = False
-        self.is_using_any_disturbance_estimator = True
+        self.warm_up_count = 0
+        self.warm_up_count_max = 0
+        self.is_using_baseline_disturbance_estimator = True
+        self.is_using_any_disturbance_estimator = False
+
+        self.max_f_feedback = 3.0  # feedback force saturation
+        self.max_f_disturb_compensation = 3.0  # disturbance compensation force saturation
+        self.b_2d_norm_min = 1e-3   # minimum norm to avoid singularity
+        self.max_torque = 2.0  # maximum torque
+        
+        # internal var logging
+        self.torque_feedback = np.array([0.0, 0.0, 0.0])
+        self.torque_coriolis = np.array([0.0, 0.0, 0.0])
+        self.torque_feedforward = np.array([0.0, 0.0, 0.0])
+        self.f_feedback = np.array([0.0, 0.0, 0.0])
+        self.f_feedforward = np.array([0.0, 0.0, 0.0])
+        self.f_disturb_compensation = np.array([0.0, 0.0, 0.0])
 
     def step_controller(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference):
         self.step_tracking_error(state, ref)
+        self.step_disturbance_estimator(state)
+        # if not self.is_warmed_up:
+        #     self.warm_up_count += 1
+        #     # skip disturbance estimator at the first cycle to prevent large initial deviation
+        #     self.f_disturb = np.array([0.0, 0.0, 0.0])
+        #     self.torque_disturb = np.array([0.0, 0.0, 0.0]) 
+        #     if self.warm_up_count > self.warm_up_count_max:
+        #         self.is_warmed_up = True
         if self.is_warmed_up:
             # skip disturbance estimator at the first cycle to prevent large initial deviation
             self.step_disturbance_estimator(state)
         else:
-            self.is_warmed_up = True
+            self.is_warmed_up = True        
         self.step_desired_force(state, ref)
         self.step_tracking_control(state)
         self.step_desired_pose(ref)
@@ -108,20 +133,23 @@ class DroneController:
         tq_disturbance = self.params.inertia@state.omega_dot + utils.get_hat_map(state.state.omega)@self.params.inertia@state.state.omega - self.torque
         return np.hstack((f_disturb, tq_disturbance))
 
-    def step_desired_force(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference, can_sense_jerk: bool=False, can_plan_jerk: bool=True):
-        """
-        to do: zero protection f_d == 0 
-        """
-        e3 = np.array([0.0, 0.0, 1.0])
-        self.f_d = (-params.Control.k_x*self.e_x - params.Control.k_v *
-                     self.e_v - self.params.m*params.Environment.g*e3 + self.params.m*ref.x_d_dot2)
+    def step_desired_force(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference, can_sense_jerk: bool=False, can_plan_jerk: bool=False):
+        f_feedback = -params.Control.k_x*self.e_x - params.Control.k_v*self.e_v
+        f_feedback = utils.saturate_vector_norm(f_feedback, self.max_f_feedback)
+
+        f_disturb_compensation = np.array([0.0, 0.0, 0.0])
         if self.is_using_any_disturbance_estimator:
             if self.is_using_baseline_disturbance_estimator:
-                self.f_d += -state.state.pose@self.f_disturb_base # add disturbance force
+                f_disturb_compensation = -state.state.pose@self.f_disturb_base # add disturbance force
             else:
-                self.f_d += -state.state.pose@self.f_disturb # add disturbance force
+                f_disturb_compensation = -state.state.pose@self.f_disturb # add disturbance force
+        f_disturb_compensation = utils.saturate_vector_norm(f_disturb_compensation, self.max_f_disturb_compensation)
+
+        e3 = np.array([0.0, 0.0, 1.0])
+        f_feedforward = -self.params.m*params.Environment.g*e3 + self.params.m*ref.x_d_dot2
+        self.f_d = f_feedback + f_feedforward + f_disturb_compensation
         if np.abs(self.f_d@self.f_d) < 0.0001:
-            print('Warning: DroneController: f_d too close to 0')
+            warnings.warn("DroneController: f_d too close to 0")
             self.f_d = -0.0001*e3    # z positive points down
         self.e_a = (state.state.pose@(-self.f) + self.params.m*params.Environment.g*e3)/self.params.m - ref.x_d_dot2
         if can_plan_jerk:
@@ -140,6 +168,11 @@ class DroneController:
         else:
             self.f_d_dot2 = (-params.Control.k_x*self.e_a - params.Control.k_v *
                             self.e_j)
+            
+        # logging
+        self.f_feedback = f_feedback
+        self.f_feedforward = f_feedforward
+        self.f_disturb_compensation = f_disturb_compensation
 
     def step_tracking_control(self, state: dynamics.DroneDynamics):
         """
@@ -156,21 +189,45 @@ class DroneController:
             self.f_d@(-state.pose[:, 2])*np.cross(state.pose@state.omega, state.pose[:, 2]))
         '''
 
-    def step_attitude_control(self, state: dynamics.DroneDynamics):
-        self.torque = -params.Control.k_r*self.e_r - params.Control.k_omega*self.e_omega + np.cross(state.state.omega, self.params.inertia@state.state.omega) - self.params.inertia@(
-            utils.get_hat_map(state.state.omega)@state.state.pose.T@self.omega_desired - state.state.pose.T@self.omega_desired_dot)
+    def step_attitude_control(self, state: dynamics.DroneDynamics, can_use_omega_desired_dot: bool=False):
+        torque_feedback = -params.Control.k_r*self.e_r - params.Control.k_omega*self.e_omega
+        torque_coriolis = np.cross(state.state.omega, self.params.inertia@state.state.omega)
+        if can_use_omega_desired_dot:
+            torque_feedforward = - self.params.inertia@(
+                utils.get_hat_map(state.state.omega)@state.state.pose.T@self.omega_desired - state.state.pose.T@self.omega_desired_dot)
+        else:
+            torque_feedforward = - self.params.inertia@(
+                utils.get_hat_map(state.state.omega)@state.state.pose.T@self.omega_desired)
+        torque_feedback = utils.saturate_vector_norm(torque_feedback, self.max_torque)
+        torque_feedforward = utils.saturate_vector_norm(torque_feedforward, self.max_torque)
+        self.torque = torque_feedback + torque_coriolis + torque_feedforward
+
+        # torque saturation
+        self.torque = utils.saturate_vector_norm(self.torque, self.max_torque)
+
+        # logging
+        self.torque_feedback = torque_feedback
+        self.torque_coriolis = torque_coriolis
+        self.torque_feedforward = torque_feedforward
 
     def step_desired_pose(self, ref: trajectory.TrajectoryReference):
         b_3d, b_3d_dot, b_3d_dot2 = utils.get_unit_vector_derivatives(-self.f_d,
                                                                       -self.f_d_dot, -self.f_d_dot2)
         self.b_3d = b_3d
         b_2d_unnormalized = np.cross(self.b_3d, ref.b_1d)
-        b_2d_unnormalized_dot = np.cross(
-            b_3d_dot, ref.b_1d) + np.cross(self.b_3d, ref.b_1d_dot)
-        b_2d_unnormalized_dot2 = np.cross(b_3d_dot2, ref.b_1d) + 2*np.cross(
-            b_3d_dot, ref.b_1d_dot) + np.cross(self.b_3d, ref.b_1d_dot2)
-        (b_2d, b_2d_dot, b_2d_dot2) = utils.get_unit_vector_derivatives(
-            b_2d_unnormalized, b_2d_unnormalized_dot, b_2d_unnormalized_dot2)
+        norm_proj = np.linalg.norm(b_2d_unnormalized)
+        if norm_proj < self.b_2d_norm_min:
+            print('Warning: DroneController: b_2d_unnormalized too close to 0, use previous value')
+            b_2d = self.b_2d
+            b_2d_dot = np.zeros(3)
+            b_2d_dot2 = np.zeros(3)
+        else:
+            b_2d_unnormalized_dot = np.cross(
+                b_3d_dot, ref.b_1d) + np.cross(self.b_3d, ref.b_1d_dot)
+            b_2d_unnormalized_dot2 = np.cross(b_3d_dot2, ref.b_1d) + 2*np.cross(
+                b_3d_dot, ref.b_1d_dot) + np.cross(self.b_3d, ref.b_1d_dot2)
+            (b_2d, b_2d_dot, b_2d_dot2) = utils.get_unit_vector_derivatives(
+                b_2d_unnormalized, b_2d_unnormalized_dot, b_2d_unnormalized_dot2)
         self.b_2d = b_2d
         b2d_x_b3d_unnormalized = np.cross(self.b_2d, self.b_3d)
         b2d_x_b3d_unnormalized_dot = np.cross(
@@ -212,7 +269,7 @@ class DroneController:
                         1 - self.pose_desired[:,1]@state.state.pose[:,1] +
                         1 - self.pose_desired[:,2]@state.state.pose[:,2])
     
-    def step_motor_output(self, state: dynamics.DroneDynamics, is_using_inflow_model: bool=False):
+    def step_motor_output(self, state: dynamics.DroneDynamics, is_using_inflow_model: bool=True):
         self.force_motor_desired = self.params.m_wrench_to_thrust@np.hstack((self.f[2], self.torque))
         if is_using_inflow_model:
             # with inflow model

@@ -40,9 +40,12 @@ def get_vector_norm_derivatives(v: np.ndarray, v_dot: np.ndarray, v_dot2: np.nda
     v_norm = np.linalg.norm(v)
     if v_norm < 0.001:
         print("Warning: get_vector_norm_derivatives: vector norm too small to get unit vector result")
-    v_norm_dot = v@v_dot/v_norm
-    v_norm_dot2 = v_dot@v_dot/v_norm + \
-        (v@v_dot2)/v_norm - (v@v_dot*v_norm_dot)/v_norm**2
+        v_norm_dot = 0
+        v_norm_dot2 = 0
+    else:
+        v_norm_dot = v@v_dot/v_norm
+        v_norm_dot2 = v_dot@v_dot/v_norm + \
+            (v@v_dot2)/v_norm - (v@v_dot*v_norm_dot)/v_norm**2
     return (v_norm, v_norm_dot, v_norm_dot2)
 
 
@@ -120,6 +123,15 @@ def convert_quaternion_to_rotation_matrix(q: np.ndarray) -> np.ndarray:
     q_compatible = [q[1], q[2], q[3], q[0]] # Rearrange from [w, x, y, z] to [x, y, z, w]
     rotation = R.from_quat(q_compatible)
     return rotation.as_matrix() 
+
+def saturate_vector_norm(v: np.ndarray, max_norm: float) -> np.ndarray:
+    """saturate the vector norm to max_norm
+    """
+    v_norm = np.linalg.norm(v)
+    if v_norm > max_norm:
+        return v/v_norm*max_norm
+    else:
+        return v
 
 class FrdFluConverter:
     m_frd_flu = np.array([[1, 0, 0],
