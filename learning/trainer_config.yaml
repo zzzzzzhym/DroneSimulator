@@ -1,5 +1,6 @@
 # training process related parameters
-learning_rate: 0.0005
+learning_rate_phi: 0.0005
+learning_rate_h: 0.001
 frequency_h: 2
 num_epochs: 1000
 alpha: 0.01    # weight of cross entropy loss

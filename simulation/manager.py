@@ -13,8 +13,8 @@ class Manager:
     """this module calls scenario maker, run engine, log and plot result"""
     def __init__(self) -> None:
         self.logger = sim_logger.Logger()
-        self.scenario = None
-        self.engine = None
+        self.scenario: scenario_factory.scenario = None
+        self.engine: engine = None
         self.result = None
 
     def set_up(self, 

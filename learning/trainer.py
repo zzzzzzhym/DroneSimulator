@@ -37,8 +37,8 @@ class Trainer:
 
         self.criterion = nn.MSELoss()
         self.criterion_h = nn.CrossEntropyLoss()
-        self.optimizer_h = optim.Adam(self.h_net.parameters(), lr=self.config["learning_rate"])
-        self.optimizer_phi = optim.Adam(self.phi_net.parameters(), lr=self.config["learning_rate"])
+        self.optimizer_h = optim.Adam(self.h_net.parameters(), lr=self.config["learning_rate_h"])
+        self.optimizer_phi = optim.Adam(self.phi_net.parameters(), lr=self.config["learning_rate_phi"])
         # initialization
         self.optimizer_phi.zero_grad()
         self.optimizer_h.zero_grad()
@@ -181,15 +181,13 @@ class Trainer:
         axs[2, 1].plot(error[:, 2])
         axs[0, 1].legend(["error"]) 
 
-    def plot_phi_out(self, out):
-        fig, axs = plt.subplots(3, 1)
-        axs[0].plot(out[:, 0])
-        axs[1].plot(out[:, 1])
-        axs[2].plot(out[:, 2])
-        axs[0].set_ylabel('phi_out_x')
-        axs[1].set_ylabel('phi_out_y')
-        axs[2].set_ylabel('phi_out_z')
-        axs[2].set_xlabel('epoch')        
+    def plot_phi_out(self, out: torch.Tensor):
+        dim = out.shape[-1]
+        fig, axs = plt.subplots(dim, 1)
+        for i in range(dim):
+            axs[i].plot(out[:, i])
+            axs[i].set_ylabel(f"phi_out_{i}")
+        axs[-1].set_xlabel('epoch')        
         
     def plot_loss(self):
         fig, axs = plt.subplots(2, 1)

@@ -87,7 +87,7 @@ class PennStateARILab550(Drone):
         h = 0.095  # height rotor to center of gravity [m]
         inertia = np.diag([0.0820, 0.0845, 0.1377])  # [kgm2]  this is temporary value, copy from elsewhere
         num_of_rotors = 4 
-        c_tau_f = 8.004e-4  # this is temporary value, copy from elsewhere
+        c_tau_f = 8.004e-3  # this is temporary value, copy from SE3 paper and intendedly increased because the weak yaw torque will hit rotor limit easily, increasing this will make a stronger yaw torque control
         # rotors are 90 degree apart
         # rotor labels start from front left in a counter-clockwise order
         p_0 = np.array([d*np.cos(np.pi/4), d*np.sin(np.pi/4), h])   # front left

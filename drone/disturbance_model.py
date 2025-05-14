@@ -168,9 +168,12 @@ class WindEffectNearWall(DisturbanceForce):
         super().__init__()
         self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6_with_trail")
         self.wind_field_model = flow_pass_flat_plate.FlowPassFlatPlate.Interface(wall_norm, wall_origin, wall_length)
-        self.u_free = u_free    # in FLU inertial frame
+        self.u_free_const = u_free    # in FLU inertial frame
         self.v_i_average = np.zeros(3)  # average downwash in FLU inertial frame
+        self.u_free = self.u_free_const.copy()
         
+    def generate_sinusoidal_wind(self, t: float) -> None:
+        self.u_free[0] = self.u_free_const[0] + 5.0*np.sin(t) # Neural Fly test condition
 
     def update_explicit_wrench(self, t: float, state: dynamics_state.State, rotor_set: rotor.RotorSet, force_control, torque_control) -> None:
         """WARNING: To be tested
@@ -178,6 +181,7 @@ class WindEffectNearWall(DisturbanceForce):
         Args:
             rotors (_type_): _description_
         """
+        self.generate_sinusoidal_wind(t)
         forces = []
         torques = []
         induced_flows = []

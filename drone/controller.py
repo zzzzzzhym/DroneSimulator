@@ -35,7 +35,7 @@ class DroneController:
         self.force_motor_available = np.array([0.0, 0.0, 0.0, 0.0])
         self.rotation_speed = np.array([0.0, 0.0, 0.0, 0.0])
         # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test_inflow", 0.01)
-        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test", 0.01)
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test_wo_inflow_2", 0.01)
         self.f_disturb = np.array([0.0, 0.0, 0.0])
         self.torque_disturb = np.array([0.0, 0.0, 0.0])        
         self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
@@ -46,11 +46,13 @@ class DroneController:
         self.is_warmed_up = False
         self.warm_up_count = 0
         self.warm_up_count_max = 0
-        self.is_using_baseline_disturbance_estimator = True
-        self.is_using_any_disturbance_estimator = False
+        self.is_using_baseline_disturbance_estimator = False
+        self.is_using_any_disturbance_estimator = True
+        self.is_using_inflow_model = False
 
-        self.max_f_feedback = 3.0  # feedback force saturation
-        self.max_f_disturb_compensation = 3.0  # disturbance compensation force saturation
+        # saturation parameters
+        self.max_f_feedback = 6.0  # feedback force saturation
+        self.max_f_disturb_compensation = 6.0  # disturbance compensation force saturation
         self.b_2d_norm_min = 1e-3   # minimum norm to avoid singularity
         self.max_torque = 2.0  # maximum torque
         
@@ -190,7 +192,10 @@ class DroneController:
         '''
 
     def step_attitude_control(self, state: dynamics.DroneDynamics, can_use_omega_desired_dot: bool=False):
+        yaw_weight = 0.2
+        w = np.diag([1.0, 1.0, yaw_weight]) # Mz is weaker
         torque_feedback = -params.Control.k_r*self.e_r - params.Control.k_omega*self.e_omega
+        torque_feedback = w@torque_feedback
         torque_coriolis = np.cross(state.state.omega, self.params.inertia@state.state.omega)
         if can_use_omega_desired_dot:
             torque_feedforward = - self.params.inertia@(
@@ -269,9 +274,9 @@ class DroneController:
                         1 - self.pose_desired[:,1]@state.state.pose[:,1] +
                         1 - self.pose_desired[:,2]@state.state.pose[:,2])
     
-    def step_motor_output(self, state: dynamics.DroneDynamics, is_using_inflow_model: bool=True):
+    def step_motor_output(self, state: dynamics.DroneDynamics):
         self.force_motor_desired = self.params.m_wrench_to_thrust@np.hstack((self.f[2], self.torque))
-        if is_using_inflow_model:
+        if self.is_using_inflow_model:
             # with inflow model
             for i, thrust in enumerate(self.force_motor_desired):
                 self.rotation_speed[i] = self.propeller_force_table.get_rotation_speed(

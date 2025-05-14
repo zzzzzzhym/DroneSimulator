@@ -14,13 +14,13 @@ class Plotter:
         # plot
         # self.plot_position_and_derivatives(logger_output)
         # self.plot_omega_and_derivatives(logger_output)
-        self.plot_pose_and_derivatives(logger_output)
+        # self.plot_pose_and_derivatives(logger_output)
         # self.plot_quaternion(logger_output)
         self.plot_trajectory(logger_output)
         self.plot_force_and_torque(logger_output)
         self.plot_position_tracking_error(logger_output)
         self.plot_pose_tracking_error(logger_output)
-        self.plot_desired_force(logger_output)
+        # self.plot_desired_force(logger_output)
         # self.plot_control_input_force(logger_output)
         self.plot_pose_desired(logger_output)
         self.plot_omega_desired(logger_output)
@@ -423,40 +423,59 @@ class Plotter:
         fig, axs = plt.subplots(4, 2, sharex=True)
         fig.suptitle('disturbance')
         f_norm = np.sqrt(
-            logger["f_disturb"][:, 0]**2 + logger["f_disturb"][:, 1]**2 + logger["f_disturb"][:, 2]**2)
+            logger["f_disturb"][:, 0]**2 +
+            logger["f_disturb"][:, 1]**2 +
+            logger["f_disturb"][:, 2]**2
+        )
         f_est_norm = np.sqrt(
-            logger["f_disturb_est"][:, 0]**2 + logger["f_disturb_est"][:, 1]**2 + logger["f_disturb_est"][:, 2]**2)
+            logger["f_disturb_est"][:, 0]**2 +
+            logger["f_disturb_est"][:, 1]**2 +
+            logger["f_disturb_est"][:, 2]**2
+        )
         f_base_norm = np.sqrt(
-            logger["f_disturb_est_base"][:, 0]**2 + logger["f_disturb_est_base"][:, 1]**2 + logger["f_disturb_est_base"][:, 2]**2)
+            logger["f_disturb_est_base"][:, 0]**2 +
+            logger["f_disturb_est_base"][:, 1]**2 +
+            logger["f_disturb_est_base"][:, 2]**2
+        )
         torque_norm = np.sqrt(
-            logger["torque_disturb"][:, 0]**2 + logger["torque_disturb"][:, 1]**2 + logger["torque_disturb"][:, 2]**2)
+            logger["torque_disturb"][:, 0]**2 +
+            logger["torque_disturb"][:, 1]**2 +
+            logger["torque_disturb"][:, 2]**2
+        )
         torque_est_norm = np.sqrt(
-            logger["torque_disturb_est"][:, 0]**2 + logger["torque_disturb_est"][:, 1]**2 + logger["torque_disturb_est"][:, 2]**2)
+            logger["torque_disturb_est"][:, 0]**2 +
+            logger["torque_disturb_est"][:, 1]**2 +
+            logger["torque_disturb_est"][:, 2]**2
+        )
         torque_base_norm = np.sqrt(
-            logger["torque_disturb_est_base"][:, 0]**2 + logger["torque_disturb_est_base"][:, 1]**2 + logger["torque_disturb_est_base"][:, 2]**2)
+            logger["torque_disturb_est_base"][:, 0]**2 +
+            logger["torque_disturb_est_base"][:, 1]**2 +
+            logger["torque_disturb_est_base"][:, 2]**2
+        )
         
-        axs[0, 0].plot(self.t_span, logger["f_disturb"][:, 0], marker='.')
-        axs[0, 0].plot(self.t_span, logger["f_disturb_est"][:, 0], marker='.')
-        axs[0, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 0], marker='.')
+        axs[0, 0].plot(self.t_span, logger["f_disturb"][:, 0], marker='.', markersize=9, linewidth=1.5, label='f_disturb')
+        axs[0, 0].plot(self.t_span, logger["f_disturb_est"][:, 0], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
+        axs[0, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 0], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
         axs[0, 0].set_ylabel("f_x")
-        axs[0, 0].legend(['f_disturb', 'f_disturb_est', 'f_disturb_est_base'])
+        axs[0, 0].legend()
         
-        axs[1, 0].plot(self.t_span, logger["f_disturb"][:, 1], marker='.')
-        axs[1, 0].plot(self.t_span, logger["f_disturb_est"][:, 1], marker='.')
-        axs[1, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 1], marker='.')
+        axs[1, 0].plot(self.t_span, logger["f_disturb"][:, 1], marker='.', markersize=9, linewidth=1.5, label='f_disturb')
+        axs[1, 0].plot(self.t_span, logger["f_disturb_est"][:, 1], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
+        axs[1, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
         axs[1, 0].set_ylabel("f_y")
-        axs[1, 0].legend(['f_disturb', 'f_disturb_est', 'f_disturb_est_base'])
+        axs[1, 0].legend()
         
-        axs[2, 0].plot(self.t_span, logger["f_disturb"][:, 2], marker='.')
-        axs[2, 0].plot(self.t_span, logger["f_disturb_est"][:, 2], marker='.')
-        axs[2, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 2], marker='.')
+        axs[2, 0].plot(self.t_span, logger["f_disturb"][:, 2], marker='.', markersize=9, linewidth=1.5, label='f_disturb')
+        axs[2, 0].plot(self.t_span, logger["f_disturb_est"][:, 2], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
+        axs[2, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
         axs[2, 0].set_ylabel("f_z")
-        axs[2, 0].legend(['f_disturb', 'f_disturb_est', 'f_disturb_est_base'])
+        axs[2, 0].legend()
         
-        axs[3, 0].plot(self.t_span, f_norm, marker='.')
-        axs[3, 0].plot(self.t_span, f_est_norm, marker='.')
-        axs[3, 0].plot(self.t_span, f_base_norm, marker='.')
+        axs[3, 0].plot(self.t_span, f_norm, marker='.', markersize=9, linewidth=1.5, label='f_norm')
+        axs[3, 0].plot(self.t_span, f_est_norm, marker='.', markersize=7, linewidth=1, label='f_est_norm')
+        axs[3, 0].plot(self.t_span, f_base_norm, marker='.', markersize=5, linewidth=0.5, label='f_base_norm')
         axs[3, 0].set_ylabel("f_norm")
+        axs[3, 0].legend()
         
         axs[0, 1].plot(self.t_span, logger["torque_disturb"][:, 0], marker='.')
         axs[0, 1].plot(self.t_span, logger["torque_disturb_est"][:, 0], marker='.')
