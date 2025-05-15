@@ -5,6 +5,7 @@ import pickle
 
 import trajectory_generator_qp
 import trajectory_logger
+import traj_gen_utils
 import common_utils.robust_pickle
 
 class FlightMap:
@@ -199,6 +200,20 @@ def construct_map_with_subtrajs(is_random=True, num_of_subtrajs: int=0, subtraj_
             subtrajs.append(trajectory_logger.read_trajectory(file_name))
     return FlightMap(subtrajs, x_limit, y_limit, z_limit)
 
+def construct_map_with_specific_subtrajs(subtraj_names: list[str], x_limit=None, y_limit=None, z_limit=None) -> FlightMap:
+    subtrajs = []
+    for name in subtraj_names:
+        file_name = traj_gen_utils.get_dir_from_traj_gen(["data", "map", name])
+        check_trajectory(file_name)
+        subtrajs.append(trajectory_logger.read_trajectory(file_name))
+    return FlightMap(subtrajs, x_limit, y_limit, z_limit)
+
+def check_trajectory(file_name: str) -> None:
+    file_path = construct_map_file_path(file_name)
+    if os.path.exists(file_path):
+        print("Map data read from: " + os.path.relpath(file_path, os.getcwd()))
+    else:
+        raise ValueError("File not exist: " + os.path.relpath(file_path, os.getcwd()))
 
 if __name__ == "__main__":
     # constructed_map = construct_map_with_subtrajs(is_random=False, subtraj_id=[21,22,23])

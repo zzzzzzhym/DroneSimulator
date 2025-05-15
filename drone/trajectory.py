@@ -75,6 +75,22 @@ class RandomWaypointsInConstrainedSpace(TrajectoryReference):
         self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4 = self.trajectory.read_data_by_time(t)   
         self.x_d[0] = self.x_d[0] - self.x_min
 
+class Figure8(TrajectoryReference):
+    def __init__(self, num_of_loops) -> None:
+        super().__init__()  # Initialize parent class parameters
+        self.trajectory: flight_map.FlightMap = flight_map.construct_map_with_specific_subtrajs(
+            ["figure_8.pkl"]*num_of_loops
+        )
+        x = []
+        for t in np.arange(0, self.trajectory.total_time, 0.2):
+            x_d, v_d, x_d_dot2, x_d_dot3, x_d_dot4 = self.trajectory.read_data_by_time(t)
+            x.append(x_d[0])
+        self.x_min = min(x)
+        self.init_x = np.array([-self.x_min, 0.0, 0.0])    
+
+    def step_reference_state(self, t) -> None:
+        self.x_d, self.v_d, self.x_d_dot2, self.x_d_dot3, self.x_d_dot4 = self.trajectory.read_data_by_time(t)   
+        self.x_d[0] = self.x_d[0] - self.x_min
 
 class SpiralAndSpin(TrajectoryReference):
     def step_reference_state(self, t) -> None:
