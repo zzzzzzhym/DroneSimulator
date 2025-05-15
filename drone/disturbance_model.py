@@ -186,7 +186,9 @@ class WindEffectNearWall(DisturbanceForce):
         torques = []
         induced_flows = []
         for rotor in rotor_set.rotors:
-            wind_velocity = self.wind_field_model.get_solution(self.u_free, rotor.position_inertial_frame)  # in FLU inertial frame
+            u_horizontal = self.u_free*np.array([1, 1, 0])  # horizontal wind velocity
+            wind_velocity = self.wind_field_model.get_solution(u_horizontal, rotor.position_inertial_frame)  # in FLU inertial frame
+            wind_velocity[2] = self.u_free[2]  # set the vertical wind velocity to be the same as the free stream velocity
             force, v_i = self.propeller_force_table.get_rotor_forces(wind_velocity, rotor.velocity_inertial_frame, rotor.pose, rotor.rotation_speed, rotor.is_ccw_blade)
             forces.append(force)
             torques.append(np.cross(rotor.relative_position_inertial_frame, force))
