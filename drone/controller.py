@@ -34,8 +34,8 @@ class DroneController:
         self.force_motor_desired = np.array([0.0, 0.0, 0.0, 0.0])
         self.force_motor_available = np.array([0.0, 0.0, 0.0, 0.0])
         self.rotation_speed = np.array([0.0, 0.0, 0.0, 0.0])
-        # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test_inflow", 0.01)
-        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("test_wo_inflow_2", 0.01)
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_inflow_in_control_train_xz_wind", 0.01)
+        # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_wo_inflow_in_control_train_xz_wind", 0.01)
         self.f_disturb = np.array([0.0, 0.0, 0.0])
         self.torque_disturb = np.array([0.0, 0.0, 0.0])        
         self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
@@ -46,7 +46,7 @@ class DroneController:
         self.is_warmed_up = False
         self.warm_up_count = 0
         self.warm_up_count_max = 0
-        self.is_using_baseline_disturbance_estimator = False
+        self.is_using_baseline_disturbance_estimator = True
         self.is_using_any_disturbance_estimator = True
         self.is_using_inflow_model = False
 

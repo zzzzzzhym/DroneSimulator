@@ -23,7 +23,7 @@ class Trainer:
         self.loaderset_phi, self.loaderset_a = self.data_manager_instance.get_data()
         self.dim_of_input = len(self.data_manager_instance.input_columns)
         self.dim_of_label = len(self.data_manager_instance.label_columns)
-        self.num_of_conditions = len(data_menu)
+        self.num_of_conditions = len(data_menu) # assume each data file has a unique condition
         self.model_factory_instance = model.ModelFactory(
             self.num_of_conditions,
             self.dim_of_input,

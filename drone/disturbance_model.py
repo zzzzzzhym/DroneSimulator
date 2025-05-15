@@ -181,7 +181,7 @@ class WindEffectNearWall(DisturbanceForce):
         Args:
             rotors (_type_): _description_
         """
-        self.generate_sinusoidal_wind(t)
+        # self.generate_sinusoidal_wind(t)
         forces = []
         torques = []
         induced_flows = []
