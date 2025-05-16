@@ -5,7 +5,6 @@ torch.set_default_tensor_type('torch.DoubleTensor')
 import yaml
 import os
 
-import model_config as model_config
 
 class MultilayerNet(nn.Module):
     """Takes config that specifies the input, hidden layer and output dimensions and makes the layers accordingly.

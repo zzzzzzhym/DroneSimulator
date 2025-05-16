@@ -14,7 +14,6 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import random_split
 
 import model
-import model_config
 import data_manager
 
 class Trainer:
@@ -109,12 +108,13 @@ class Trainer:
                 batch_phi = next(iter(self.loaderset_phi[case_num]))
                 batch_a = next(iter(self.loaderset_a[case_num]))
             self.optimizer_phi.zero_grad()   # reset gradient before each training section starts
-            phi_output = self.phi_net(batch_phi['input'])
+            prediction_on_adapter_data = self.phi_net(batch_a['input'])
             if self.config["is_dynamic_environment"]:
-                a = self.get_optimal_a(phi_output, batch_phi['output'])
+                a = self.get_optimal_a(prediction_on_adapter_data, batch_a['output'])
             else:
                 a = torch.ones((self.dim_of_feature, self.dim_of_label))
                 a[self.dim_of_feature-1,:] = torch.zeros(self.dim_of_label)
+            phi_output = self.phi_net(batch_phi['input'])
             prediction = self.get_prediction(phi_output, a)
             loss_h = self.criterion_h(self.h_net(phi_output), batch_phi['c'])
             loss_phi = self.criterion(prediction, batch_phi['output']) - alpha*loss_h
@@ -174,8 +174,23 @@ class Trainer:
         self.plot_prediction_error(error, groundtruth, prediction)
         self.plot_phi_out(phi_out)
         return error, groundtruth, prediction
+    
+    def inspect_data(self, test_data: list[str]):
+        with torch.no_grad():
+            dataset = self.data_manager_instance.prepare_datasets(test_data)
+            for data in dataset:
+                groundtruth = torch.tensor(data.output)
+                fig, axs = plt.subplots(3, 1)
+                axs[0].plot(groundtruth[:, 0])
+                axs[1].plot(groundtruth[:, 1])
+                axs[2].plot(groundtruth[:, 2])
+                axs[0].legend(["groundtruth", "prediction"]) 
+                axs[0].set_ylabel('f_disturb_x')
+                axs[1].set_ylabel('f_disturb_y')
+                axs[2].set_ylabel('f_disturb_z')
 
     def plot_prediction_error(self, error, groundtruth, prediction):
+        """assumes the output is 3d (fx,fy,fz)"""
         fig, axs = plt.subplots(3, 2)
         axs[0, 0].plot(groundtruth[:, 0])
         axs[1, 0].plot(groundtruth[:, 1])
@@ -283,7 +298,7 @@ class Trainer:
         return config
     
 
-def load_model(name) -> tuple[model.PhiNet, model.HNet, model_config.ModelConfig]:
+def load_model(name) -> tuple[model.PhiNet, model.HNet, dict]:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(current_dir, "model", name + ".pth")       
     package = torch.load(file_path)
@@ -306,39 +321,6 @@ def load_model(name) -> tuple[model.PhiNet, model.HNet, model_config.ModelConfig
     h.eval()
     return phi, h, config
         
-
-if __name__ == "__main__":
-    is_back2back = False
-    if not is_back2back:
-        data_list = ["test_wall_effect_h_1_5r_dh_0.csv",
-                    "test_wall_effect_h_2r_dh_0.csv",
-                    "test_wall_effect_h_3r_dh_0.csv"]
-                    # "test_wall_effect_h_4r_dh_0.csv"]
-        config = model_config.ModelConfig(len(data_list), dim_of_feature=5)
-        trainer = Trainer(config)
-        trainer.train_model(data_list)
-        trainer.verify_model(["test_wall_effect_h_1_8r_dh_0.csv"])
-    else:
-        data_list = ['custom_random3_baseline_10wind.csv',
-                    'custom_random3_baseline_20wind.csv',
-                    'custom_random3_baseline_30wind.csv',
-                    'custom_random3_baseline_40wind.csv',
-                    'custom_random3_baseline_50wind.csv',
-                    'custom_random3_baseline_nowind.csv']
-        config = model_config.ModelConfig(len(data_list))
-        trainer = Trainer(config)
-        trainer.train_model(data_list, True)
-        trainer.verify_model(['custom_random3_baseline_10wind.csv'], True)
-    trainer.plot_loss()
-    trainer.plot_a()
-
-    trainer.save_model("wall_effect")
-    phi, h, config1 = load_model("wall_effect")
-    trainer1 = Trainer(config1)
-    trainer1.phi_net = phi
-    trainer1.h_net = h
-    trainer1.verify_model(['test_wall_effect_h_1_8r_dh_0.csv'])
-    plt.show()    
 
 
 

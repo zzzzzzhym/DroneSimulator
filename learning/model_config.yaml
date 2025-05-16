@@ -8,4 +8,4 @@ HNet:
   hidden_layer_dimensions:
     - 20
   
-dim_of_feature: 5
+dim_of_feature: 4
