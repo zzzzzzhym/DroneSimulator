@@ -6,6 +6,6 @@ PhiNet:
 
 HNet:
   hidden_layer_dimensions:
-    - 20
+    - 64
   
-dim_of_feature: 4
+dim_of_feature: 6

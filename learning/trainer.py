@@ -122,7 +122,7 @@ class Trainer:
             self.optimizer_phi.step()
 
             if self.can_train_h_net():
-                self.optimizer_h.zero_grad() # remove h_net gradient gained from loss_pi 
+                self.optimizer_h.zero_grad() # remove h_net gradient gained from loss_phi 
                 phi_output = self.phi_net(batch_phi['input']) # get output again after optimizer step
                 loss_h = self.criterion_h(self.h_net(phi_output), batch_phi['c'])
                 loss_h.backward()
