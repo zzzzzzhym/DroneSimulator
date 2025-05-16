@@ -34,8 +34,8 @@ class DroneController:
         self.force_motor_desired = np.array([0.0, 0.0, 0.0, 0.0])
         self.force_motor_available = np.array([0.0, 0.0, 0.0, 0.0])
         self.rotation_speed = np.array([0.0, 0.0, 0.0, 0.0])
-        # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_inflow_in_control_train_xz_wind", 0.01)
-        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_wo_inflow_in_control_train_xz_wind", 0.01)
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_inflow_in_control_train_xz_wind", 0.01)
+        # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_wo_inflow_in_control_train_xz_wind", 0.01)
         self.f_disturb = np.array([0.0, 0.0, 0.0])
         self.torque_disturb = np.array([0.0, 0.0, 0.0])        
         self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
@@ -63,6 +63,7 @@ class DroneController:
         self.f_feedback = np.array([0.0, 0.0, 0.0])
         self.f_feedforward = np.array([0.0, 0.0, 0.0])
         self.f_disturb_compensation = np.array([0.0, 0.0, 0.0])
+        self.f_disturb_sensed_raw = np.array([0.0, 0.0, 0.0])
 
     def step_controller(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference):
         self.step_tracking_error(state, ref)
@@ -90,6 +91,7 @@ class DroneController:
     def step_disturbance_estimator(self, state: dynamics.DroneDynamics):
         # tracking_error = np.zeros(6)  # assume no tracking error term in disturbance estimator
         tracking_error = np.hstack((self.e_v, np.zeros(3)))
+        self.f_disturb_sensed_raw = self.get_disturbance(state)[0:3]
         self.disturbance_estimator.step_disturbance(
             state.state.position,
             state.state.v,

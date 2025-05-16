@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import yaml
+from sklearn.manifold import TSNE
+import seaborn as sns
 
 import torch
 import torch.nn as nn
@@ -16,9 +18,9 @@ import model_config
 import data_manager
 
 class Trainer:
-    def __init__(self, data_menu: list, input_label_map_file: str, column_map_file: str) -> None:
+    def __init__(self, data_menu: list, input_label_map_file: str, column_map_file: str, can_skip_io_normalizaiton: bool) -> None:
         self.data_manager_instance = data_manager.DataManager(
-            data_menu, input_label_map_file, column_map_file
+            data_menu, input_label_map_file, column_map_file, can_skip_io_normalizaiton
         )
         self.loaderset_phi, self.loaderset_a = self.data_manager_instance.get_data()
         self.dim_of_input = len(self.data_manager_instance.input_columns)
@@ -44,7 +46,10 @@ class Trainer:
         self.optimizer_h.zero_grad()
         self.loss_phi_trace = []
         self.loss_h_trace = []
-        self.a_trace =[np.zeros((0, self.dim_of_feature, self.dim_of_label))] * (self.num_of_conditions)   # a list of 3D array, a_trace[condition_ID][iteration] = a where a is the a matrix
+        self.a_trace = [
+            np.zeros((self.config["num_epochs"], self.dim_of_feature, self.dim_of_label))
+            for _ in range(self.num_of_conditions)
+        ]   # a list of 3D array, a_trace[condition_ID][iteration] = a where a is the a matrix
 
     @staticmethod
     def load_config(config_file: str):
@@ -92,7 +97,13 @@ class Trainer:
         
         loss_phi_sum = 0.0
         loss_h_sum = 0.0
-        a_trace =[np.zeros((0, self.dim_of_feature, self.dim_of_label))] * (self.num_of_conditions)
+        a_trace_per_step = [
+            np.zeros((0, self.dim_of_feature, self.dim_of_label))
+            for _ in range(self.num_of_conditions)
+        ]
+        alpha = 0.0
+        if epoch > self.config["warmup_epoch"]:
+            alpha = self.config["alpha"]
         for case_num in randomized_cases:
             with torch.no_grad():
                 batch_phi = next(iter(self.loaderset_phi[case_num]))
@@ -106,7 +117,7 @@ class Trainer:
                 a[self.dim_of_feature-1,:] = torch.zeros(self.dim_of_label)
             prediction = self.get_prediction(phi_output, a)
             loss_h = self.criterion_h(self.h_net(phi_output), batch_phi['c'])
-            loss_phi = 10000*self.criterion(prediction, batch_phi['output']) - self.config["alpha"]*loss_h
+            loss_phi = self.criterion(prediction, batch_phi['output']) - alpha*loss_h
             loss_phi.backward()
             self.optimizer_phi.step()
 
@@ -133,8 +144,8 @@ class Trainer:
             loss_phi_sum += loss_phi.item()
             loss_h_sum += loss_h.item()
             a_np = np.copy(a.detach().numpy())
-            a_trace[case_num] = np.concatenate((a_trace[case_num], np.array([a_np])), axis=0)
-        return loss_phi_sum, loss_h_sum, a_trace
+            a_trace_per_step[case_num] = np.concatenate((a_trace_per_step[case_num], np.array([a_np])), axis=0)
+        return loss_phi_sum, loss_h_sum, a_trace_per_step
 
 
     def train_model(self):
@@ -145,7 +156,8 @@ class Trainer:
             self.loss_phi_trace.append(loss_phi/self.num_of_conditions)
             self.loss_h_trace.append(loss_h/self.num_of_conditions)
             for case_num in range(len(a_trace)):
-                self.a_trace[case_num] = np.concatenate((self.a_trace[case_num], a_trace[case_num]), axis=0)
+                # self.a_trace[case_num] = np.concatenate((self.a_trace[case_num], a_trace[case_num]), axis=0)
+                self.a_trace[case_num][epoch] = a_trace[case_num]
             if epoch % 100 == 0:
                 print('[%d] loss_f: %.2f loss_c: %.2f' % (epoch + 1, self.loss_phi_trace[-1], self.loss_h_trace[-1]))
     
@@ -198,12 +210,48 @@ class Trainer:
         axs[1].set_xlabel('epoch')
 
     def plot_a(self):
+        # a_trace shape: (num_of_conditions, num_of_iterations, dim_of_feature, dim_of_label)
         for i in range(len(self.a_trace)):
             _, row, col = self.a_trace[i].shape
             fig, axs = plt.subplots(row, col)
             for j in range(row):
                 for k in range(col):
                     axs[j,k].plot(self.a_trace[i][:, j, k])
+
+    def plot_tsne_of_a(self, selected_epochs: list[int]):
+        """
+        Visualize the t-SNE of all learned 'a' vectors.
+        Assumes self.a_trace[domain_id] is shape [N, dim_a, dim_y] per domain.
+
+        Args:
+            title (str): Plot title
+            max_points_per_domain (int): To subsample for large traces
+        """
+        all_a = []
+        all_labels = []
+        for domain_id, a_array in enumerate(self.a_trace):
+            # a_array: shape (N, dim_a, dim_y), flatten over last dim
+            valid_indices = [i for i in selected_epochs if i < len(a_array)]
+
+            a_flat = a_array[valid_indices].reshape(len(valid_indices), -1)
+            all_a.append(a_flat)
+            all_labels.append(np.full(len(valid_indices), domain_id))
+
+        X = np.concatenate(all_a, axis=0)
+        Y = np.concatenate(all_labels, axis=0)
+
+        # Run t-SNE
+        X_tsne = TSNE(n_components=2, perplexity=5, learning_rate='auto', init='pca', random_state=0).fit_transform(X)
+
+        # Plot
+        plt.figure(figsize=(12, 8))
+        sns.scatterplot(x=X_tsne[:, 0], y=X_tsne[:, 1], hue=Y, palette='tab10', s=25)
+        plt.title("t-SNE of a")
+        plt.xlabel("t-SNE dim 1")
+        plt.ylabel("t-SNE dim 2")
+        plt.legend(title="Domain", loc='best')
+        plt.grid(True)
+        plt.tight_layout()
 
     def save_model(self, name):
         current_dir = os.path.dirname(os.path.abspath(__file__))

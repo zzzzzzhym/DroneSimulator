@@ -456,18 +456,21 @@ class Plotter:
         axs[0, 0].plot(self.t_span, logger["f_disturb"][:, 0], marker='.', markersize=9, linewidth=1.5, label='f_disturb')
         axs[0, 0].plot(self.t_span, logger["f_disturb_est"][:, 0], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
         axs[0, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 0], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
+        axs[0, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 0], marker='.', markersize=5, linewidth=0.3, label='f_disturb_sensed_raw')
         axs[0, 0].set_ylabel("f_x")
         axs[0, 0].legend()
         
         axs[1, 0].plot(self.t_span, logger["f_disturb"][:, 1], marker='.', markersize=9, linewidth=1.5, label='f_disturb')
         axs[1, 0].plot(self.t_span, logger["f_disturb_est"][:, 1], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
         axs[1, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
+        axs[1, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_sensed_raw')
         axs[1, 0].set_ylabel("f_y")
         axs[1, 0].legend()
         
         axs[2, 0].plot(self.t_span, logger["f_disturb"][:, 2], marker='.', markersize=9, linewidth=1.5, label='f_disturb')
         axs[2, 0].plot(self.t_span, logger["f_disturb_est"][:, 2], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
         axs[2, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
+        axs[2, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_sensed_raw')
         axs[2, 0].set_ylabel("f_z")
         axs[2, 0].legend()
         

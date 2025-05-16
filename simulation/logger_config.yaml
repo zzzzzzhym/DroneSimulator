@@ -299,3 +299,10 @@ torque_feedforward:
     - z
   can_save_to_file: false
   is_label: false
+f_disturb_sensed_raw:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: false
+  is_label: false

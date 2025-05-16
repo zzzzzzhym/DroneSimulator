@@ -41,7 +41,7 @@ class DataManager:
     2. check which columns are input and which are labels
     3. generate LearningDataset and then LoaderSets for trainer
     4. normalize the data"""
-    def __init__(self, data_menu: list, input_label_map_file: str, column_map_file: str) -> None:
+    def __init__(self, data_menu: list, input_label_map_file: str, column_map_file: str, can_skip_io_normalizaiton: bool) -> None:
         self.data_menu = data_menu
         self.input_label_map = DataManager.get_map(input_label_map_file)
         self.column_map = DataManager.get_map(column_map_file)
@@ -49,7 +49,7 @@ class DataManager:
         self.config = DataManager.load_config("data_manager_config.yaml")
         self.input_normalization: dict[int, normalization.Normalization] = {}
         self.label_normalization: dict[int, normalization.Normalization] = {}
-        self.input_mean_vector, self.input_scale_vector, self.label_mean_vector, self.label_scale_vector = self.make_normalization_params(column_map_file)
+        self.input_mean_vector, self.input_scale_vector, self.label_mean_vector, self.label_scale_vector = self.make_normalization_params(column_map_file, can_skip=can_skip_io_normalizaiton)
 
     @staticmethod
     def find_input_label_column(input_label_map: dict, column_map: dict):
@@ -168,7 +168,7 @@ class DataManager:
         with open(output_path, 'w') as file:
             yaml.dump(content, file)
         
-    def make_normalization_params(self, column_map_file: str) -> None:
+    def make_normalization_params(self, column_map_file: str, can_skip: bool) -> None:
         # if the normalization params file is not generated, generate it
         column_map_file_path = DataManager.get_path_to_data_file(column_map_file)
         column_map_dir = os.path.dirname(column_map_file_path)
@@ -199,26 +199,12 @@ class DataManager:
                 scale.append(normalization_params["output"][columns]["scale"])
         label_mean_vector = np.array(mean)
         label_scale_vector = np.array(scale)
+        if can_skip:
+            input_mean_vector = np.zeros(input_mean_vector.shape)
+            input_scale_vector = np.ones(input_scale_vector.shape)
+            label_mean_vector = np.zeros(label_mean_vector.shape)
+            label_scale_vector = np.ones(label_scale_vector.shape)
         return input_mean_vector, input_scale_vector, label_mean_vector, label_scale_vector
 
 
-
-
-if __name__ == "__main__":
-    data_list = ["test_air_drag_0.csv"]
-    dataset: list[LearningDataset] = prepare_datasets(data_list)
-    phi_set, a_set = prepare_loadersets(dataset, model_config.ModelConfig(len(data_list)).Trainer)
-    for batch_idx, data_batch in enumerate(phi_set[0]):
-        print(f"Batch {batch_idx + 1}:")
-        print(f"Data:\n{data_batch}")
-    # dataset = prepare_back2back_datasets(['custom_random3_baseline_10wind.csv',
-    #                                       'custom_random3_baseline_20wind.csv',
-    #                                       'custom_random3_baseline_30wind.csv',
-    #                                       'custom_random3_baseline_40wind.csv',
-    #                                       'custom_random3_baseline_50wind.csv',
-    #                                       'custom_random3_baseline_nowind.csv'])
-
-    for data in dataset:
-        data.plot_data()
-    plt.show()
 

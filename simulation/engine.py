@@ -82,6 +82,7 @@ class Engine:
             logger.buffer["f_disturb"].append(self.scenario.dynamics.f_disturb)
             logger.buffer["f_disturb_est"].append(self.scenario.controller.f_disturb)
             logger.buffer["f_disturb_est_base"].append(self.scenario.controller.f_disturb_base)
+            logger.buffer["f_disturb_sensed_raw"].append(self.scenario.controller.f_disturb_sensed_raw)
             logger.buffer["torque_disturb"].append(self.scenario.dynamics.torque_disturb)
             logger.buffer["torque_disturb_est"].append(self.scenario.controller.torque_disturb)
             logger.buffer["torque_disturb_est_base"].append(self.scenario.controller.torque_disturb_base)
