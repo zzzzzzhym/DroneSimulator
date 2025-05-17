@@ -1,7 +1,8 @@
 # training process related parameters
 learning_rate_phi: 0.0005
-learning_rate_h: 0.001
-frequency_h: 2
+learning_rate_h: 0.0005
+frequency_h: 4
+fine_tune_epoch_h: 300
 num_epochs: 1000
 alpha: 0.002    # weight of cross entropy loss
 warmup_epoch: 10  # number of warmup steps before introducing the cross entropy loss

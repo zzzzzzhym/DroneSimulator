@@ -118,10 +118,24 @@ class Trainer:
             prediction = self.get_prediction(phi_output, a)
             loss_h = self.criterion_h(self.h_net(phi_output), batch_phi['c'])
             loss_phi = self.criterion(prediction, batch_phi['output']) - alpha*loss_h
+            # trial code -> 
+            # loss_mse = self.criterion(prediction, batch_phi['output'])
+            # self.optimizer_phi.zero_grad()
+            # loss_mse.backward(retain_graph=True)
+            # mse_grad_norm = self.compute_grad_norm(self.phi_net)
+            # self.optimizer_phi.zero_grad()
+            # loss_h.backward(retain_graph=True)
+            # ce_grad_norm = self.compute_grad_norm(self.phi_net)
+            # epsilon = 1e-8
+            # alpha = float(mse_grad_norm / (ce_grad_norm + epsilon))*0.002
+            # alpha = max(0.0000001, min(alpha, 0.0000002))  # Clamp to safe range
+            # self.optimizer_phi.zero_grad()
+            # loss_phi = loss_mse - alpha * loss_h
+            # trial code <-
             loss_phi.backward()
             self.optimizer_phi.step()
 
-            if self.can_train_h_net():
+            if self.can_train_h_net() or self.config["fine_tune_epoch_h"] < epoch:
                 self.optimizer_h.zero_grad() # remove h_net gradient gained from loss_phi 
                 phi_output = self.phi_net(batch_phi['input']) # get output again after optimizer step
                 loss_h = self.criterion_h(self.h_net(phi_output), batch_phi['c'])
@@ -146,6 +160,14 @@ class Trainer:
             a_np = np.copy(a.detach().numpy())
             a_trace_per_step[case_num] = np.concatenate((a_trace_per_step[case_num], np.array([a_np])), axis=0)
         return loss_phi_sum, loss_h_sum, a_trace_per_step
+
+    def compute_grad_norm(self, model):
+        total_norm = 0.0
+        for p in model.parameters():
+            if p.grad is not None:
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        return total_norm ** 0.5
 
 
     def train_model(self):
