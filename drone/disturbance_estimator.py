@@ -17,7 +17,7 @@ class UnitDisturbance:
         self.p_cov = np.eye(num_of_kernels)     # covariance matrix, p_cov.shape = dim_of_a_hat*dim_of_a_hat
         self.lambda_reg = np.eye(num_of_kernels)*0.01
         self.dt = dt
-        self.r = np.eye(1)*200  # measurement noise, r.shape = (measured disturbance dimension)^2
+        self.r = np.eye(1)*20  # measurement noise, r.shape = (measured disturbance dimension)^2
         self.q = np.eye(num_of_kernels)    # process noise, q.shape = p_cov.shape   
         self.scale = scale # normalization factor for the model labels, (raw - mean)*scale = normalized
         self.mean = mean # normalization factor for the model labels, (raw - mean)*scale = normalized

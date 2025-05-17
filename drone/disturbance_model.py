@@ -209,6 +209,17 @@ class WindEffectNearWall(DisturbanceForce):
         self.t_explicit[2] = 0.0    # the inflow model did not model torque in z axis
         self.v_i_average = sum(induced_flows) / len(induced_flows)
         self.f_explicit += self.get_disturbance_on_drone_body(state)  # add the air drag force on the drone body to the propeller force
+        # self.blend_white_noise()  # add white noise to the force and torque
+
+    def blend_white_noise(self):
+        """Blend the white noise to the force and torque
+        """
+        f_noise_std = np.abs(self.f_explicit)*0.2
+        tq_noise_std = np.array([0.001, 0.001, 0.001])
+        f_noise = np.random.normal(0, f_noise_std)
+        tq_noise = np.random.normal(0, tq_noise_std)  
+        self.f_explicit += f_noise
+        self.t_explicit += tq_noise
 
     def get_disturbance_on_drone_body(self, state: dynamics_state.State) -> np.ndarray:
         v_local_wind = self.wind_field_model.get_solution(self.u_free, state.position)

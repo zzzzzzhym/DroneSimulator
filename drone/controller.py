@@ -34,8 +34,8 @@ class DroneController:
         self.force_motor_desired = np.array([0.0, 0.0, 0.0, 0.0])
         self.force_motor_available = np.array([0.0, 0.0, 0.0, 0.0])
         self.rotation_speed = np.array([0.0, 0.0, 0.0, 0.0])
-        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_inflow_in_control_train_xz_wind", 0.01)
-        # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_wo_inflow_in_control_train_xz_wind", 0.01)
+        # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_inflow_in_control_train_xz_wind_2_limited", 0.01)
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_wo_inflow_in_control_train_xz_wind_2_limited", 0.01)
         self.f_disturb = np.array([0.0, 0.0, 0.0])
         self.torque_disturb = np.array([0.0, 0.0, 0.0])        
         self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
@@ -48,7 +48,7 @@ class DroneController:
         self.warm_up_count_max = 0
         self.is_using_baseline_disturbance_estimator = True   
         self.is_using_any_disturbance_estimator = True
-        self.is_using_inflow_model = True
+        self.is_using_inflow_model = False
 
         # saturation parameters
         self.max_f_feedback = 6.0  # feedback force saturation
@@ -132,9 +132,28 @@ class DroneController:
         ])
 
     def get_disturbance(self, state: dynamics.DroneDynamics):
-        """Distrubance force in body frame"""
-        f_disturb = self.f + state.state.pose.T@(state.v_dot*self.params.m - self.params.m*params.Environment.g*np.array([0.0, 0.0, 1.0]))
-        tq_disturbance = self.params.inertia@state.omega_dot + utils.get_hat_map(state.state.omega)@self.params.inertia@state.state.omega - self.torque
+        """Disturbance force in body frame"""
+        f_disturb = (
+            self.f
+            + state.state.pose.T @ (
+            state.v_dot * self.params.m
+            - self.params.m * params.Environment.g * np.array([0.0, 0.0, 1.0])
+            )
+        )
+
+        tq_disturbance = (
+            self.params.inertia @ state.omega_dot
+            + utils.get_hat_map(state.state.omega) @ self.params.inertia @ state.state.omega
+            - self.torque
+        )
+
+        # # Add noise
+        # f_noise_std = np.array([0.1, 0.1, 0.1])*2
+        # tq_noise_std = np.array([0.01, 0.01, 0.01])
+        # f_noise = np.random.normal(0, f_noise_std)
+        # tq_noise = np.random.normal(0, tq_noise_std)        
+        # return np.hstack((f_disturb + f_noise, tq_disturbance + tq_noise))
+    
         return np.hstack((f_disturb, tq_disturbance))
 
     def step_desired_force(self, state: dynamics.DroneDynamics, ref: trajectory.TrajectoryReference, can_sense_jerk: bool=False, can_plan_jerk: bool=False):
