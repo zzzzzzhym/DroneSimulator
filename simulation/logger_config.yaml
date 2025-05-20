@@ -306,3 +306,19 @@ f_disturb_sensed_raw:
     - z
   can_save_to_file: false
   is_label: false
+rotor_0_rotation_spd_delayed:
+  components: []
+  can_save_to_file: false
+  is_label: false
+rotor_1_rotation_spd_delayed:
+  components: []
+  can_save_to_file: false
+  is_label: false
+rotor_2_rotation_spd_delayed:
+  components: []
+  can_save_to_file: false
+  is_label: false
+rotor_3_rotation_spd_delayed:
+  components: []
+  can_save_to_file: false
+  is_label: false

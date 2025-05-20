@@ -183,19 +183,19 @@ class Trainer:
             if epoch % 100 == 0:
                 print('[%d] loss_f: %.2f loss_c: %.2f' % (epoch + 1, self.loss_phi_trace[-1], self.loss_h_trace[-1]))
     
-    def verify_model(self, test_data: list[str]):
+    def verify_model(self, test_data_menu: list[str]):
         self.phi_net.eval()
         with torch.no_grad():
-            dataset = self.data_manager_instance.prepare_datasets(test_data)
-            phi_out = self.phi_net(torch.tensor(dataset[0].input))
-            groundtruth = torch.tensor(dataset[0].output)
-            a = self.get_optimal_a(phi_out, groundtruth)
-            print(f"a = {a}")
-            prediction = self.get_prediction(phi_out, a)
-            error = groundtruth - prediction
-        self.plot_prediction_error(error, groundtruth, prediction)
-        self.plot_phi_out(phi_out)
-        return error, groundtruth, prediction
+            for test_data in test_data_menu:
+                dataset = self.data_manager_instance.prepare_datasets([test_data])
+                phi_out = self.phi_net(torch.tensor(dataset[0].input))
+                groundtruth = torch.tensor(dataset[0].output)
+                a = self.get_optimal_a(phi_out, groundtruth)
+                print(f"a = {a}")
+                prediction = self.get_prediction(phi_out, a)
+                error = groundtruth - prediction
+                self.plot_prediction_error(error, groundtruth, prediction, test_data)
+                self.plot_phi_out(phi_out)
     
     def inspect_data(self, test_data: list[str]):
         with torch.no_grad():
@@ -211,9 +211,16 @@ class Trainer:
                 axs[1].set_ylabel('f_disturb_y')
                 axs[2].set_ylabel('f_disturb_z')
 
-    def plot_prediction_error(self, error, groundtruth, prediction):
+    def plot_prediction_error(self, error, groundtruth, prediction, title):
         """assumes the output is 3d (fx,fy,fz)"""
-        fig, axs = plt.subplots(3, 2)
+        abs_error = np.abs(error.detach().cpu().numpy()) if isinstance(error, torch.Tensor) else np.abs(error)
+        p90 = np.percentile(abs_error, 90, axis=0)
+
+        fig, axs = plt.subplots(3, 2, figsize=(10, 6))
+        fig.suptitle(f"{title}\n P90 Error: "
+                    f"fx={p90[0]:.3f} N, fy={p90[1]:.3f} N, fz={p90[2]:.3f} N", fontsize=12)
+
+        # Plot ground truth vs prediction
         axs[0, 0].plot(groundtruth[:, 0])
         axs[1, 0].plot(groundtruth[:, 1])
         axs[2, 0].plot(groundtruth[:, 2])
@@ -225,10 +232,21 @@ class Trainer:
         axs[1, 0].set_ylabel('f_disturb_y')
         axs[2, 0].set_ylabel('f_disturb_z')
 
+        # Plot errors
         axs[0, 1].plot(error[:, 0])
         axs[1, 1].plot(error[:, 1])
         axs[2, 1].plot(error[:, 2])
-        axs[0, 1].legend(["error"]) 
+        axs[0, 1].legend(["error"])
+        axs[0, 1].set_ylabel('error_x')
+        axs[1, 1].set_ylabel('error_y')
+        axs[2, 1].set_ylabel('error_z')
+
+        # Add P90 text annotation to each error plot
+        axs[0, 1].text(0.95, 0.95, f"P90={p90[0]:.3f}", ha='right', va='top', transform=axs[0, 1].transAxes)
+        axs[1, 1].text(0.95, 0.95, f"P90={p90[1]:.3f}", ha='right', va='top', transform=axs[1, 1].transAxes)
+        axs[2, 1].text(0.95, 0.95, f"P90={p90[2]:.3f}", ha='right', va='top', transform=axs[2, 1].transAxes)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.95])  # Leave space for suptitle        
 
     def plot_phi_out(self, out: torch.Tensor):
         dim = out.shape[-1]

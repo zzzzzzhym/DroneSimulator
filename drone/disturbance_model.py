@@ -167,10 +167,11 @@ class WindEffectNearWall(DisturbanceForce):
     def __init__(self, wall_origin=np.array([-0.5, 0, 0]), wall_norm=np.array([1, 0, 0]), wall_length=4.0, u_free=np.array([-5.0, 0.0, 0.0])) -> None:
         super().__init__()
         self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6_with_trail")
-        self.wind_field_model = flow_pass_flat_plate.FlowPassFlatPlate.Interface(wall_norm, wall_origin, wall_length)
+        self.wind_field_model = flow_pass_flat_plate.FlowPassFlatPlate.Interface(wall_norm, np.array([0.0, 0.0, 1.0]), wall_origin, wall_length)
         self.u_free_const = u_free    # in FLU inertial frame
         self.v_i_average = np.zeros(3)  # average downwash in FLU inertial frame
         self.u_free = self.u_free_const.copy()
+        self.delayed_rotor_set_speed = None
         
     def generate_sinusoidal_wind(self, t: float) -> None:
         self.u_free[0] = self.u_free_const[0] + 5.0*np.sin(t) # Neural Fly test condition
@@ -185,11 +186,12 @@ class WindEffectNearWall(DisturbanceForce):
         forces = []
         torques = []
         induced_flows = []
-        for rotor in rotor_set.rotors:
+        self.step_delayed_rotation_speed(rotor_set)
+        for rotor, delayed_rotor_speed in zip(rotor_set.rotors, self.delayed_rotor_set_speed):
             u_horizontal = self.u_free*np.array([1, 1, 0])  # horizontal wind velocity
             wind_velocity = self.wind_field_model.get_solution(u_horizontal, rotor.position_inertial_frame)  # in FLU inertial frame
             wind_velocity[2] = self.u_free[2]  # set the vertical wind velocity to be the same as the free stream velocity
-            force, v_i = self.propeller_force_table.get_rotor_forces(wind_velocity, rotor.velocity_inertial_frame, rotor.pose, rotor.rotation_speed, rotor.is_ccw_blade)
+            force, v_i = self.propeller_force_table.get_rotor_forces(wind_velocity, rotor.velocity_inertial_frame, rotor.pose, delayed_rotor_speed, rotor.is_ccw_blade)
             forces.append(force)
             torques.append(np.cross(rotor.relative_position_inertial_frame, force))
             induced_flows.append(v_i)
@@ -227,6 +229,19 @@ class WindEffectNearWall(DisturbanceForce):
         v_total_wind = utils.FrdFluConverter.flip_vector(self.v_i_average*alpha + v_local_wind)
         f = AirDrag.get_air_drag(v_total_wind - state.v)
         return f
+    
+    def step_delayed_rotation_speed(self, rotor_set: rotor.RotorSet) -> None:
+        """This function low pass filter the rotation speed
+        """
+        alpha = 0.95 # amount of delay
+        if self.delayed_rotor_set_speed is None:
+            self.delayed_rotor_set_speed = []
+            for rotor in rotor_set.rotors:
+                self.delayed_rotor_set_speed.append(rotor.rotation_speed)
+        else:
+            for i, rotor in enumerate(rotor_set.rotors):
+                self.delayed_rotor_set_speed[i] = (1.0 - alpha) * rotor.rotation_speed + alpha * self.delayed_rotor_set_speed[i]
+
 
 class AggregatedDisturbanceForce(DisturbanceForce):
     """This class is used to aggregate multiple disturbance forces. It is not a disturbance force itself.

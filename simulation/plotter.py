@@ -501,20 +501,75 @@ class Plotter:
         axs[3, 1].set_ylabel("torque_norm")
 
     def plot_rotor(self, logger: np.ndarray):
-        fig, axs = plt.subplots(2, 1, sharex=True)
-        fig.suptitle('rotor force, rotor speed')
-        axs[0].plot(self.t_span, logger["f_motor"][:, 0], label="Rotor 0 Force")
-        axs[0].plot(self.t_span, logger["f_motor"][:, 1], label="Rotor 1 Force")
-        axs[0].plot(self.t_span, logger["f_motor"][:, 2], label="Rotor 2 Force")
-        axs[0].plot(self.t_span, logger["f_motor"][:, 3], label="Rotor 3 Force")
+        # fig, axs = plt.subplots(2, 1, sharex=True)
+        # fig.suptitle('rotor force, rotor speed')
+        # axs[0].plot(self.t_span, logger["f_motor"][:, 0], label="Rotor 0 Force")
+        # axs[0].plot(self.t_span, logger["f_motor"][:, 1], label="Rotor 1 Force")
+        # axs[0].plot(self.t_span, logger["f_motor"][:, 2], label="Rotor 2 Force")
+        # axs[0].plot(self.t_span, logger["f_motor"][:, 3], label="Rotor 3 Force")
+        # axs[0].set_ylabel("Rotor Forces")
+        # axs[0].legend()
+        # axs[1].plot(self.t_span, logger["rotor_0_rotation_spd"], label="Rotor 0 Speed")
+        # axs[1].plot(self.t_span, logger["rotor_1_rotation_spd"], label="Rotor 1 Speed")
+        # axs[1].plot(self.t_span, logger["rotor_2_rotation_spd"], label="Rotor 2 Speed")
+        # axs[1].plot(self.t_span, logger["rotor_3_rotation_spd"], label="Rotor 3 Speed")
+        # axs[1].plot(self.t_span, logger["rotor_0_rotation_spd_delayed"], label="Rotor 0 Speed delayed")
+        # axs[1].plot(self.t_span, logger["rotor_1_rotation_spd_delayed"], label="Rotor 1 Speed delayed")
+        # axs[1].plot(self.t_span, logger["rotor_2_rotation_spd_delayed"], label="Rotor 2 Speed delayed")
+        # axs[1].plot(self.t_span, logger["rotor_3_rotation_spd_delayed"], label="Rotor 3 Speed delayed")
+        # axs[1].set_ylabel("rotor_spd [RPM]")
+        # axs[1].legend()
+        fig, axs = plt.subplots(2, 1, sharex=True, figsize=(10, 6))
+        fig.suptitle('Rotor Force & Rotor Speed')
+
+        # === Rotor Force Plot ===
+        force_colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']
+        line_width_base = 1.5
+        line_width_gap = 0.8
+        force_line_width = [line_width_base + (4-i) * line_width_gap for i in range(4)]
+        for i in range(4):
+            axs[0].plot(
+                self.t_span, 
+                logger["f_motor"][:, i], 
+                label=f"Rotor {i} Force", 
+                linestyle='-', 
+                linewidth=force_line_width[i], 
+                color=force_colors[i], 
+                zorder=3+i  # ensure later lines go on top
+            )
         axs[0].set_ylabel("Rotor Forces")
-        axs[0].legend()
-        axs[1].plot(self.t_span, logger["rotor_0_rotation_spd"], label="Rotor 0 Speed")
-        axs[1].plot(self.t_span, logger["rotor_1_rotation_spd"], label="Rotor 1 Speed")
-        axs[1].plot(self.t_span, logger["rotor_2_rotation_spd"], label="Rotor 2 Speed")
-        axs[1].plot(self.t_span, logger["rotor_3_rotation_spd"], label="Rotor 3 Speed")
-        axs[1].set_ylabel("rotor_spd [RPM]")
-        axs[1].legend()
+        axs[0].legend(loc='upper right')
+
+        # === Rotor Speed Plot ===
+        speed_colors = force_colors
+        speed_line_width = force_line_width
+        delay_styles = ['--', '--', '--', '--']  # dashed for delayed
+        for i in range(4):
+            axs[1].plot(
+                self.t_span, 
+                logger[f"rotor_{i}_rotation_spd"], 
+                label=f"Rotor {i} Speed", 
+                color=speed_colors[i], 
+                linestyle='-', 
+                linewidth=speed_line_width[i], 
+                zorder=2*i
+            )
+            axs[1].plot(
+                self.t_span, 
+                logger[f"rotor_{i}_rotation_spd_delayed"], 
+                label=f"Rotor {i} Speed delayed", 
+                color=speed_colors[i], 
+                linestyle=delay_styles[i], 
+                linewidth=speed_line_width[i], 
+                zorder=2*i + 1
+            )
+        axs[1].set_ylabel("Rotor Speed [RPM]")
+        axs[1].legend(loc='upper right')
+
+        # Optional: Grid and layout
+        for ax in axs:
+            ax.grid(True)
+        fig.tight_layout(rect=[0, 0.03, 1, 0.95])
 
     def plot_omega_desired(self, logger: np.ndarray):
         fig, axs = plt.subplots(3, 1, sharex=True)

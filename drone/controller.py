@@ -34,8 +34,8 @@ class DroneController:
         self.force_motor_desired = np.array([0.0, 0.0, 0.0, 0.0])
         self.force_motor_available = np.array([0.0, 0.0, 0.0, 0.0])
         self.rotation_speed = np.array([0.0, 0.0, 0.0, 0.0])
-        # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_inflow_in_control_train_xz_wind_2_limited", 0.01)
-        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_wo_inflow_in_control_train_xz_wind_2_limited", 0.01)
+        # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_bemt_in_control_train_xz_wind", 0.01)
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_wo_bemt_in_control_train_xz_wind", 0.01)
         self.f_disturb = np.array([0.0, 0.0, 0.0])
         self.torque_disturb = np.array([0.0, 0.0, 0.0])        
         self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
@@ -49,6 +49,9 @@ class DroneController:
         self.is_using_baseline_disturbance_estimator = True   
         self.is_using_any_disturbance_estimator = True
         self.is_using_inflow_model = False
+        print("DroneController: using inflow model: ", self.is_using_inflow_model)
+        print("DroneController: using disturbance estimator: ", self.is_using_any_disturbance_estimator)
+        print("DroneController: using baseline disturbance estimator: ", self.is_using_baseline_disturbance_estimator)
 
         # saturation parameters
         self.max_f_feedback = 6.0  # feedback force saturation

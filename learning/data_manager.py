@@ -118,9 +118,10 @@ class DataManager:
         """Separate the dataset into two parts: part1 for phi NN and part2 for adaptation coeffecients, 
         generate a data loader for each part"""
         length = len(training_data)
-        part1 = int(length*2/3)
-        part2 = length - int(length*2/3)
-        phi_set, a_set = random_split(training_data, [part1, part2])
+        ratio = self.config["phi_shot"]/(self.config["phi_shot"] + self.config["a_shot"])
+        part_phi = int(length*ratio)
+        part_a = length - part_phi
+        phi_set, a_set = random_split(training_data, [part_phi, part_a])
         phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=self.config["phi_shot"], shuffle=True)
         a_loader = torch.utils.data.DataLoader(a_set, batch_size=self.config["a_shot"], shuffle=True)
         return phi_loader, a_loader

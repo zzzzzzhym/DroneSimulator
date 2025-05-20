@@ -21,7 +21,7 @@ class Rotor:
     """
     def __init__(self, propeller: propeller.Propeller, relative_position_body_frame: np.ndarray, is_ccw_blade: bool) -> None:
         self.is_ccw_blade = is_ccw_blade
-        self.rotation_speed = 0             # rotation speed [rad/s]
+        self.rotation_speed = 0.0             # rotation speed [rad/s]
         self.velocity_inertial_frame = np.zeros(3)  # rotor center velocity in inertial frame
         self.position_inertial_frame = np.zeros(3)  # rotor center position in inertial frame
         self.pose = np.eye(3)               # rotor pose in FLU inertial frame
