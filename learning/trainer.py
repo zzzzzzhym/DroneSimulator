@@ -14,24 +14,24 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import random_split
 
 import model
-import data_manager
+import data_factory
 
 class Trainer:
     def __init__(self, data_menu: list, input_label_map_file: str, column_map_file: str, can_skip_io_normalizaiton: bool) -> None:
-        self.data_manager_instance = data_manager.DataManager(
+        self.data_factory_instance = data_factory.DataFactory(
             data_menu, input_label_map_file, column_map_file, can_skip_io_normalizaiton
         )
-        self.loaderset_phi, self.loaderset_a = self.data_manager_instance.get_data()
-        self.dim_of_input = len(self.data_manager_instance.input_columns)
-        self.dim_of_label = len(self.data_manager_instance.label_columns)
+        self.loaderset_phi, self.loaderset_a = self.data_factory_instance.get_data()
+        self.dim_of_input = len(self.data_factory_instance.input_columns)
+        self.dim_of_label = len(self.data_factory_instance.label_columns)
         self.num_of_conditions = len(data_menu) # assume each data file has a unique condition
         self.model_factory_instance = model.ModelFactory(
             self.num_of_conditions,
             self.dim_of_input,
-            self.data_manager_instance.input_mean_vector,
-            self.data_manager_instance.input_scale_vector,
-            self.data_manager_instance.label_mean_vector,
-            self.data_manager_instance.label_scale_vector,
+            self.data_factory_instance.input_mean_vector,
+            self.data_factory_instance.input_scale_vector,
+            self.data_factory_instance.label_mean_vector,
+            self.data_factory_instance.label_scale_vector,
         )
         self.phi_net, self.h_net, self.dim_of_feature = self.model_factory_instance.generate_nets()
         self.config = Trainer.load_config("trainer_config.yaml")
@@ -186,7 +186,7 @@ class Trainer:
     def verify_model(self, test_data_menu: list[str], is_x_y = True):
         self.phi_net.eval()
         with torch.no_grad():
-            dataset = self.data_manager_instance.prepare_datasets(test_data_menu)
+            dataset = self.data_factory_instance.prepare_datasets(test_data_menu)
             for data, name in zip(dataset, test_data_menu):
                 phi_out = self.phi_net(torch.tensor(data.input))
                 print(f"phi_out: {phi_out}")
@@ -200,7 +200,7 @@ class Trainer:
     
     def inspect_data(self, test_data: list[str]):
         with torch.no_grad():
-            dataset = self.data_manager_instance.prepare_datasets(test_data)
+            dataset = self.data_factory_instance.prepare_datasets(test_data)
             for data in dataset:
                 groundtruth = torch.tensor(data.output)
                 fig, axs = plt.subplots(3, 1)
@@ -330,11 +330,11 @@ class Trainer:
         config["phi_net_input_args"]["dim_of_input "] = self.dim_of_input
         config["phi_net_input_args"]["dim_of_output"] = self.dim_of_feature
         config["phi_net_input_args"]["dim_of_layers"] = self.model_factory_instance.config["PhiNet"]["hidden_layer_dimensions"]
-        config["phi_net_input_args"]["input_mean"] = self.data_manager_instance.input_mean_vector
-        config["phi_net_input_args"]["input_scale"] = self.data_manager_instance.input_scale_vector
-        config["phi_net_input_args"]["output_mean"] = self.data_manager_instance.label_mean_vector
-        config["phi_net_input_args"]["output_scale"] = self.data_manager_instance.label_scale_vector
-        config["phi_net_io_fields"] = self.data_manager_instance.input_label_map
+        config["phi_net_input_args"]["input_mean"] = self.data_factory_instance.input_mean_vector
+        config["phi_net_input_args"]["input_scale"] = self.data_factory_instance.input_scale_vector
+        config["phi_net_input_args"]["output_mean"] = self.data_factory_instance.label_mean_vector
+        config["phi_net_input_args"]["output_scale"] = self.data_factory_instance.label_scale_vector
+        config["phi_net_io_fields"] = self.data_factory_instance.input_label_map
         
         config["h_net_input_args"]["dim_of_input"] = self.dim_of_feature
         config["h_net_input_args"]["dim_of_output"] = self.num_of_conditions
