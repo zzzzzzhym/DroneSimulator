@@ -14,26 +14,23 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import random_split
 
 import model
-import data_manager
 
 class Trainer:
-    def __init__(self, data_menu: list, input_label_map_file: str, column_map_file: str, can_skip_io_normalizaiton: bool) -> None:
-        self.data_manager_instance = data_manager.DataManager(
-            data_menu, input_label_map_file, column_map_file, can_skip_io_normalizaiton
-        )
-        self.loaderset_phi, self.loaderset_a = self.data_manager_instance.get_data()
-        self.dim_of_input = len(self.data_manager_instance.input_columns)
-        self.dim_of_label = len(self.data_manager_instance.label_columns)
-        self.num_of_conditions = len(data_menu) # assume each data file has a unique condition
-        self.model_factory_instance = model.ModelFactory(
-            self.num_of_conditions,
-            self.dim_of_input,
-            self.data_manager_instance.input_mean_vector,
-            self.data_manager_instance.input_scale_vector,
-            self.data_manager_instance.label_mean_vector,
-            self.data_manager_instance.label_scale_vector,
-        )
-        self.phi_net, self.h_net, self.dim_of_feature = self.model_factory_instance.generate_nets()
+    def __init__(self,
+                 phi_net: model.MultilayerNet,
+                 h_net: model.MultilayerNet,
+                 loaderset_phi: list[DataLoader],
+                 loaderset_a: list[DataLoader],
+                 dim_of_label: int
+                 ) -> None:
+        self.phi_net = phi_net
+        self.h_net = h_net
+        self.loaderset_phi = loaderset_phi
+        self.loaderset_a = loaderset_a
+        self.dim_of_label = dim_of_label
+        self.num_of_conditions = self.h_net.dim_of_output   # should match the length of loaderset_phi and loaderset_a
+        if self.num_of_conditions != len(loaderset_phi) or self.num_of_conditions != len(loaderset_a):
+            raise ValueError("Number of conditions does not match the length of loaderset_phi and loaderset_a")
         self.config = Trainer.load_config("trainer_config.yaml")
 
         self.criterion = nn.MSELoss()
@@ -46,9 +43,9 @@ class Trainer:
         self.loss_phi_trace = []
         self.loss_h_trace = []
         self.a_trace = [
-            np.zeros((self.config["num_epochs"], self.dim_of_feature, self.dim_of_label))
+            np.zeros((self.config["num_epochs"], self.phi_net.dim_of_output, self.dim_of_label))
             for _ in range(self.num_of_conditions)
-        ]   # a list of 3D array, a_trace[condition_ID][iteration] = a where a is the a matrix
+        ]   # a list of 3D array, a_trace[condition_ID][iteration] = adapter matrix, a
 
     @staticmethod
     def load_config(config_file: str):
@@ -97,8 +94,8 @@ class Trainer:
         loss_phi_sum = 0.0
         loss_h_sum = 0.0
         a_trace_per_step = [
-            np.zeros((0, self.dim_of_feature, self.dim_of_label))
-            for _ in range(self.num_of_conditions)
+            np.zeros((0, self.a_trace[0].shape[1], self.a_trace[0].shape[2]))
+            for _ in range(len(self.a_trace))
         ]
         alpha = 0.0
         if epoch > self.config["warmup_epoch"]:
@@ -112,8 +109,8 @@ class Trainer:
             if self.config["is_dynamic_environment"]:
                 a = self.get_optimal_a(prediction_on_adapter_data, batch_a['output'])
             else:
-                a = torch.ones((self.dim_of_feature, self.dim_of_label))
-                a[self.dim_of_feature-1,:] = torch.zeros(self.dim_of_label)
+                a = torch.ones(self.a_trace[case_num].shape[1], self.a_trace[case_num].shape[2])
+                a[-1,:] = torch.zeros(self.a_trace[case_num].shape[2])
             phi_output = self.phi_net(batch_phi['input'])
             prediction = self.get_prediction(phi_output, a)
             loss_h = self.criterion_h(self.h_net(phi_output), batch_phi['c'])
@@ -186,7 +183,7 @@ class Trainer:
     def verify_model(self, test_data_menu: list[str], is_x_y = True):
         self.phi_net.eval()
         with torch.no_grad():
-            dataset = self.data_manager_instance.prepare_datasets(test_data_menu)
+            dataset = self.data_factory_instance.prepare_datasets(test_data_menu)
             for data, name in zip(dataset, test_data_menu):
                 phi_out = self.phi_net(torch.tensor(data.input))
                 print(f"phi_out: {phi_out}")
@@ -200,7 +197,7 @@ class Trainer:
     
     def inspect_data(self, test_data: list[str]):
         with torch.no_grad():
-            dataset = self.data_manager_instance.prepare_datasets(test_data)
+            dataset = self.data_factory_instance.prepare_datasets(test_data)
             for data in dataset:
                 groundtruth = torch.tensor(data.output)
                 fig, axs = plt.subplots(3, 1)
@@ -312,58 +309,6 @@ class Trainer:
         plt.grid(True)
         plt.tight_layout()
 
-    def save_model(self, name):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(current_dir, "model", name + ".pth")
-        torch.save({"phi": self.phi_net.state_dict(),
-                    "h": self.h_net.state_dict(),
-                    "config": self.gather_model_config()}, 
-                    file_path)
-        print(f"Model saved to {os.path.relpath(file_path, os.getcwd())}")
-        
-    def gather_model_config(self):
-        """Extract model configuration from the model factory and data manager for later reconstruct the model in application.
-        Model config contains how to recreate the model and how to use it"""
-        config = {"phi_net_input_args": {},
-                  "h_net_input_args": {},
-                  "phi_net_io_fields": {}}
-        config["phi_net_input_args"]["dim_of_input "] = self.dim_of_input
-        config["phi_net_input_args"]["dim_of_output"] = self.dim_of_feature
-        config["phi_net_input_args"]["dim_of_layers"] = self.model_factory_instance.config["PhiNet"]["hidden_layer_dimensions"]
-        config["phi_net_input_args"]["input_mean"] = self.data_manager_instance.input_mean_vector
-        config["phi_net_input_args"]["input_scale"] = self.data_manager_instance.input_scale_vector
-        config["phi_net_input_args"]["output_mean"] = self.data_manager_instance.label_mean_vector
-        config["phi_net_input_args"]["output_scale"] = self.data_manager_instance.label_scale_vector
-        config["phi_net_io_fields"] = self.data_manager_instance.input_label_map
-        
-        config["h_net_input_args"]["dim_of_input"] = self.dim_of_feature
-        config["h_net_input_args"]["dim_of_output"] = self.num_of_conditions
-        config["h_net_input_args"]["dim_of_layers"] = self.model_factory_instance.config["HNet"]["hidden_layer_dimensions"]
-        return config
-    
-
-def load_model(name) -> tuple[model.PhiNet, model.HNet, dict]:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(current_dir, "model", name + ".pth")       
-    package = torch.load(file_path)
-    config = package["config"]
-    # generate an empty phi net
-    phi = model.PhiNet(config["phi_net_input_args"]["dim_of_input "], 
-                       config["phi_net_input_args"]["dim_of_output"], 
-                       config["phi_net_input_args"]["dim_of_layers"], 
-                       config["phi_net_input_args"]["input_mean"], 
-                       config["phi_net_input_args"]["input_scale"], 
-                       config["phi_net_input_args"]["output_mean"], 
-                       config["phi_net_input_args"]["output_scale"])
-    phi.load_state_dict(package["phi"])
-    phi.eval()  # set to eval mode
-    # similar for h net
-    h = model.HNet(config["h_net_input_args"]["dim_of_input"],
-                   config["h_net_input_args"]["dim_of_output"],
-                   config["h_net_input_args"]["dim_of_layers"])
-    h.load_state_dict(package["h"])
-    h.eval()
-    return phi, h, config
         
 
 

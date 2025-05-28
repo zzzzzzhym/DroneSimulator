@@ -1,2 +1,0 @@
-a_shot: 256    # batch size for solving optimal adaptation coeff
-phi_shot: 256    # batch size of phi net training
