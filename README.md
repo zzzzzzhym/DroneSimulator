@@ -17,6 +17,12 @@ To run the simulation, use the following command to ensure the modules are prope
 python -m <module_name>
 ```
 
+To run all unit tests, in the repo root folder, run 
+
+```bash
+python -m unittest discover -s . -p "*_test.py"
+```
+
 ## Demo
 The simulation environment can produce the drone flight trace and its reference path.  
 ![drone fly](images/drone_tracking_a_trajectory.png)  
