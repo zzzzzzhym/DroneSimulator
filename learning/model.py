@@ -11,6 +11,9 @@ class MultilayerNet(nn.Module):
     The forward function need to be defined as requested by nn.Module. But it's not shown in this base class."""
     def __init__(self, dim_of_input, dim_of_output, dim_of_layers: list, can_append_bias: bool = False):
         super().__init__()
+        self.dim_of_input = dim_of_input
+        self.dim_of_output = dim_of_output
+
         self.layers = nn.ModuleList()
         if can_append_bias:
             nn_output = dim_of_output - 1 # append bias appended in forward
@@ -65,7 +68,15 @@ class HNet(MultilayerNet):
 
     
 class ModelFactory:
-    def __init__(self, num_of_conditions, dim_of_input, input_mean, input_scale, label_mean, label_scale, customized_config: dict = None):
+    def __init__(self,
+                 num_of_conditions,
+                 dim_of_input,
+                 input_mean,
+                 input_scale,
+                 label_mean,
+                 label_scale,
+                 customized_config: dict = None
+                 ):
         """consider the following example to predict disturbance forces:
         (v_0 v_1 v_2 q_0 q_1 q_2 q_3 pwm_0 pwm_1 pwm_2 pwm_3)
         velocity (3) + quaternion (4) + input (4) = 11
@@ -98,7 +109,7 @@ class ModelFactory:
             self.num_of_conditions,
             self.config["HNet"]["hidden_layer_dimensions"]
         )
-        return phi_net, h_net, self.config["dim_of_feature"]
+        return phi_net, h_net
 
     @staticmethod
     def set_up_config(customized_config: dict = None):
@@ -122,3 +133,16 @@ class ModelFactory:
         with open(config_path, 'r') as file:
             config = yaml.safe_load(file)
         return config
+    
+    def generate_self_config(self) -> dict:
+        """Generate a self-contained configuration dictionary. 
+        Use this as input argument to recreate the same factory and produce the exact model later."""
+        return {
+            "num_of_conditions": self.num_of_conditions,
+            "dim_of_input": self.dim_of_input,
+            "input_mean": self.input_mean,
+            "input_scale": self.input_scale,
+            "label_mean": self.label_mean,
+            "label_scale": self.label_scale,
+            "customized_config": self.config
+        }
