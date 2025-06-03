@@ -4,6 +4,7 @@ import torch
 import model
 import data_factory
 import trainer
+import validator
 
 class TrainingManager:
     def __init__(self) -> None:
@@ -44,15 +45,21 @@ class TrainingManager:
             len(self.data_factory_instance.label_columns)
         )
 
+    def set_up_validator(self) -> None:
+        self.validator_instance = validator.Validator(
+            self.trainer_instance.config
+        )
+
     def set_up(self,
                data_menu: list,
                input_label_map_file: str,
                column_map_file: str,
-               can_skip_io_normalizaiton: bool
+               can_skip_io_normalizaiton: bool,
                ) -> None:
         self.set_up_data_factory(data_menu, input_label_map_file, column_map_file, can_skip_io_normalizaiton)
         self.set_up_model_factory()
         self.set_up_trainer()
+        self.set_up_validator()
 
     def train(self) -> None:
         self.trainer_instance.train_model()
@@ -66,6 +73,12 @@ class TrainingManager:
                     "phi_net_io_fields": self.data_factory_instance.input_label_map}, 
                     file_path)
         print(f"Model saved to {os.path.relpath(file_path, os.getcwd())}")
+
+    def validate(self, phi_net: model.MultilayerNet, h_net: model.MultilayerNet, data_menu_validation: list) -> None:
+        dataset = self.data_factory_instance.prepare_datasets(data_menu_validation)        
+        self.validator_instance.load_model(phi_net, h_net)
+        self.validator_instance.load_dataset(dataset)
+        self.validator_instance.validate_model()
 
 def load_model(name) -> tuple[model.PhiNet, model.HNet, dict]:
     current_dir = os.path.dirname(os.path.abspath(__file__))
