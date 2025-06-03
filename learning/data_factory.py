@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import seaborn as sns
 import yaml
 
 import torch
@@ -111,6 +112,7 @@ class DataFactory:
         condition_id = 0    # ID value doesn't matter, but each different condition should have different ID
         for file in data_menu:
             data = DataFactory.load_sim_data(file)
+            self.inspect_data(data)  # inspect the data 
             dataset = self.convert_sim_to_training_data(data, condition_id)
             condition_id += 1
             datasets.append(dataset)
@@ -208,6 +210,28 @@ class DataFactory:
             label_mean_vector = np.zeros(label_mean_vector.shape)
             label_scale_vector = np.ones(label_scale_vector.shape)
         return input_mean_vector, input_scale_vector, label_mean_vector, label_scale_vector
+
+    def inspect_data(self, sim_data):
+        input_data = sim_data[:, self.input_columns]
+        titles = self.input_label_map["input"]
+        DataFactory.plot_dataset_distribution_grid(input_data, titles)
+
+            
+    @staticmethod
+    def plot_dataset_distribution_grid(data: np.ndarray, titles: list[str], bins=50, figsize=(20, 10), cols=7):
+        num_features = data.shape[1]
+        rows = (num_features + cols - 1) // cols
+        fig, axes = plt.subplots(rows, cols, figsize=figsize)
+        axes = axes.flatten()
+        for i in range(num_features):
+            sns.histplot(data[:, i], bins=bins, kde=True, ax=axes[i])
+            axes[i].set_title(titles[i])
+            axes[i].set_xlabel("Value")
+            axes[i].set_ylabel("Frequency")
+            axes[i].grid(True)
+        for j in range(num_features, len(axes)):
+            fig.delaxes(axes[j])
+        plt.tight_layout()
 
 
 
