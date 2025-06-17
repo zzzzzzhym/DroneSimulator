@@ -38,14 +38,14 @@ class DroneDynamics:
     def step_dynamics(self, t: float, f: np.ndarray, torque: np.ndarray, rotation_speed: np.ndarray) -> None:
         """Entry point of drone dynamics"""
         self.take_control_output(f, torque, rotation_speed)
-        self.rotors.step_rotor_states(self.state, self.rotation_speed)  # just to update rotor speed (should separate state and speed)
+        self.rotors.step_all_rotor_states(self.state, self.rotation_speed)  # just to update rotor speed (should separate state and speed)
         y_0 = self.pack_state_vector()
         self.step_disturbance_force(t)
         y_t = self.step_state_vector(y_0, t)
         self.unpack_state_vector(y_t)
         y_t_dot = self.get_derivatives_from_eom(t, y_t)   # argument t does affect output
         self.unpack_state_derivatives(y_t_dot)
-        self.rotors.step_rotor_states(self.state, self.rotation_speed)
+        self.rotors.step_all_rotor_states(self.state, self.rotation_speed)
 
     def take_control_output(self, f: np.ndarray, torque: np.ndarray, rotation_speed: np.ndarray) -> None:
         """Take control output from controller"""
@@ -136,7 +136,7 @@ class DroneDynamics:
         state = State(position, v, 
                       utils.convert_quaternion_to_rotation_matrix(np.array((y[6], y[7], y[8], y[9]))), 
                       omega)
-        self.rotors.step_rotor_states(state, self.rotation_speed)
+        self.rotors.step_all_rotor_states(state, self.rotation_speed)
         # self.disturbance.update_explicit_wrench(t, state, self.rotors, self.f, self.torque) # may significantly increase computation time
 
         position_dot = v

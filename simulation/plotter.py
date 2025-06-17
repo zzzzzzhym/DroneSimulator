@@ -457,6 +457,8 @@ class Plotter:
         axs[0, 0].plot(self.t_span, logger["f_disturb_est"][:, 0], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
         axs[0, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 0], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
         axs[0, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 0], marker='.', markersize=5, linewidth=0.3, label='f_disturb_sensed_raw')
+        axs[0, 0].plot(self.t_span, logger["f_propeller"][:, 0], marker='.', markersize=5, linewidth=0.2, label='f_propeller')
+        axs[0, 0].plot(self.t_span, logger["f_body"][:, 0], marker='.', markersize=5, linewidth=0.1, label='f_body')
         axs[0, 0].set_ylabel("f_x")
         axs[0, 0].legend()
         
@@ -464,6 +466,8 @@ class Plotter:
         axs[1, 0].plot(self.t_span, logger["f_disturb_est"][:, 1], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
         axs[1, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
         axs[1, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_sensed_raw')
+        axs[1, 0].plot(self.t_span, logger["f_propeller"][:, 1], marker='.', markersize=5, linewidth=0.2, label='f_propeller')
+        axs[1, 0].plot(self.t_span, logger["f_body"][:, 1], marker='.', markersize=5, linewidth=0.1, label='f_body')        
         axs[1, 0].set_ylabel("f_y")
         axs[1, 0].legend()
         
@@ -471,6 +475,8 @@ class Plotter:
         axs[2, 0].plot(self.t_span, logger["f_disturb_est"][:, 2], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
         axs[2, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
         axs[2, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_sensed_raw')
+        axs[2, 0].plot(self.t_span, logger["f_propeller"][:, 2], marker='.', markersize=5, linewidth=0.2, label='f_propeller')
+        axs[2, 0].plot(self.t_span, logger["f_body"][:, 2], marker='.', markersize=5, linewidth=0.1, label='f_body')        
         axs[2, 0].set_ylabel("f_z")
         axs[2, 0].legend()
         

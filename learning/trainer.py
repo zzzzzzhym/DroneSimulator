@@ -32,20 +32,32 @@ class Trainer:
         if self.num_of_conditions != len(loaderset_phi) or self.num_of_conditions != len(loaderset_a):
             raise ValueError("Number of conditions does not match the length of loaderset_phi and loaderset_a")
         self.config = Trainer.load_config("trainer_config.yaml")
+        self.criterion = None
+        self.criterion_h = None
+        self.optimizer_h = None
+        self.optimizer_phi = None
 
-        self.criterion = nn.MSELoss()
-        self.criterion_h = nn.CrossEntropyLoss()
-        self.optimizer_h = optim.Adam(self.h_net.parameters(), lr=self.config["learning_rate_h"])
-        self.optimizer_phi = optim.Adam(self.phi_net.parameters(), lr=self.config["learning_rate_phi"])
         # initialization
-        self.optimizer_phi.zero_grad()
-        self.optimizer_h.zero_grad()
+        self.set_optimizers()
+        self.set_criterion()
         self.loss_phi_trace = []
         self.loss_h_trace = []
+        self.loss_phi_trace_on_validation = []
         self.a_trace = [
             np.zeros((self.config["num_epochs"], self.phi_net.dim_of_output, self.dim_of_label))
             for _ in range(self.num_of_conditions)
         ]   # a list of 3D array, a_trace[condition_ID][iteration] = adapter matrix, a
+
+    def set_optimizers(self):
+        """Set optimizers for phi_net and h_net"""
+        self.optimizer_h = optim.Adam(self.h_net.parameters(), lr=self.config["learning_rate_h"])
+        self.optimizer_phi = optim.Adam(self.phi_net.parameters(), lr=self.config["learning_rate_phi"])
+        self.optimizer_phi.zero_grad()
+        self.optimizer_h.zero_grad()
+
+    def set_criterion(self):
+        self.criterion = nn.MSELoss()
+        self.criterion_h = nn.CrossEntropyLoss()
 
     @staticmethod
     def load_config(config_file: str):
@@ -56,7 +68,31 @@ class Trainer:
             config = yaml.safe_load(file)
         return config
 
-    def get_optimal_a(self, phi: torch.Tensor, ground_truth):
+    def get_optimal_a(self, phi: torch.Tensor, ground_truth, is_greedy: bool=False) -> torch.Tensor:
+        """Get the optimal adapter matrix using greedy residual fitting.
+        """
+        if not is_greedy:
+            a = self.get_least_square_of_a(phi, ground_truth)
+            a = self.normalize_a(a)
+        else:
+            num_of_phi_rows, num_of_phi_columns = phi.shape
+            # num_of_y_columns = ground_truth.shape[1]
+            residual = ground_truth.clone()
+
+            # use list to avoid in-place writes to prevent breaking the autograd graph
+            a_rows = []
+
+            for column in range(num_of_phi_columns):
+                phi_column = phi[:, column].unsqueeze(1)  # shape (num_of_phi_rows, 1)
+                a_row = self.get_least_square_of_a(phi_column, residual).squeeze(0)  # shape (num_of_y_columns,)
+                a_rows.append(a_row)
+                residual = residual - torch.mm(phi_column, a_row.unsqueeze(0))  # shape (num_of_phi_rows, num_of_y_columns)
+
+            a = torch.stack(a_rows, dim=0)  # shape (num_of_phi_columns, num_of_y_columns)
+            a = self.normalize_a(a)
+        return a
+
+    def get_least_square_of_a(self, phi: torch.Tensor, ground_truth):
         """
         phi*a = labels
         a = inv(phi_t*phi)*phi_t*labels
@@ -70,13 +106,29 @@ class Trainer:
         """
         phi_t = phi.transpose(0,1)
         phi_t_phi_inv = torch.inverse(torch.mm(phi_t, phi))
-        a = torch.mm(phi_t_phi_inv, torch.mm(phi_t, ground_truth))
+        a = torch.mm(phi_t_phi_inv, torch.mm(phi_t, ground_truth.to(phi.device)))
+        return a
+
+    def normalize_a(self, a: torch.Tensor) -> torch.Tensor:
+        """Normalize the adapter matrix a to have Frobenius norm of gamma"""
         if torch.norm(a, 'fro') < 0.00001:
             raise ValueError(f"a is too small, a = {a}")
         else:
-            a = a / torch.norm(a, 'fro') * self.config["gamma"]
-        return a
+            return a / torch.norm(a, 'fro') * self.config["gamma"]
 
+    # def normalize_a(self, a: torch.Tensor) -> torch.Tensor:
+    #     """Normalize all but the first row of adapter matrix a to have Frobenius norm gamma."""
+    #     # Extract rows to be normalized
+    #     a_rest = a[1:]  # shape: (M-1, D)
+    #     norm = torch.norm(a_rest, p='fro')
+    #     if norm < 1e-5:
+    #         raise ValueError(f"a (excluding first row) is too small, a = {a}")
+        
+    #     # Normalize only rows 1 to end
+    #     a_normalized = a.clone()
+    #     a_normalized[1:] = a_rest / norm * self.config["gamma"]
+    #     return a_normalized
+    
     @staticmethod
     def get_prediction(phi, a):
         return torch.mm(phi, a)
@@ -107,7 +159,7 @@ class Trainer:
             self.optimizer_phi.zero_grad()   # reset gradient before each training section starts
             prediction_on_adapter_data = self.phi_net(batch_a['input'])
             if self.config["is_dynamic_environment"]:
-                a = self.get_optimal_a(prediction_on_adapter_data, batch_a['output'])
+                a = self.get_optimal_a(prediction_on_adapter_data, batch_a['output'], self.config["use_greedy_residual_fitting"])
             else:
                 a = torch.ones(self.a_trace[case_num].shape[1], self.a_trace[case_num].shape[2])
                 a[-1,:] = torch.zeros(self.a_trace[case_num].shape[2])
@@ -145,7 +197,7 @@ class Trainer:
             if self.config["spectral_norm"] > 0:
                 for param in self.phi_net.parameters():
                     M = param.detach().numpy()
-                    if M.ndim > 1:
+                    if M.shape[0] > 0:  # only normalize if the layter takes input (pure bias layer will have shape (0, n))
                         s = np.linalg.norm(M, 2)
                         if s > self.config["spectral_norm"]:
                             param.data = param / s * self.config["spectral_norm"]
@@ -166,49 +218,28 @@ class Trainer:
                 total_norm += param_norm.item() ** 2
         return total_norm ** 0.5
 
-
-    def train_model(self):
+    def train_model(self, validation_callback):
         self.loss_phi_trace = []
         self.loss_h_trace = []
+        self.loss_phi_trace_on_validation = []
         for epoch in range(self.config["num_epochs"]):
+            # set the model to training mode in case validation mode change it to eval mode from previous epoch
+            self.phi_net.train()
+            self.h_net.train()
             loss_phi, loss_h, a_trace = self.step_training(epoch)
             self.loss_phi_trace.append(loss_phi/self.num_of_conditions)
             self.loss_h_trace.append(loss_h/self.num_of_conditions)
+            self.loss_phi_trace_on_validation.append(validation_callback())
             for case_num in range(len(a_trace)):
-                # self.a_trace[case_num] = np.concatenate((self.a_trace[case_num], a_trace[case_num]), axis=0)
                 self.a_trace[case_num][epoch] = a_trace[case_num]
             if epoch % 100 == 0:
-                print('[%d] loss_f: %.2f loss_c: %.2f' % (epoch + 1, self.loss_phi_trace[-1], self.loss_h_trace[-1]))
-    
-    def verify_model(self, test_data_menu: list[str], is_x_y = True):
-        self.phi_net.eval()
-        with torch.no_grad():
-            dataset = self.data_factory_instance.prepare_datasets(test_data_menu)
-            for data, name in zip(dataset, test_data_menu):
-                phi_out = self.phi_net(torch.tensor(data.input))
-                print(f"phi_out: {phi_out}")
-                groundtruth = torch.tensor(data.output)
-                a = self.get_optimal_a(phi_out, groundtruth)
-                print(f"a = {a}")
-                prediction = self.get_prediction(phi_out, a)
-                error = groundtruth - prediction
-                self.plot_prediction_error(error, groundtruth, prediction, name)
-                self.plot_phi_out(phi_out)
-    
-    def inspect_data(self, test_data: list[str]):
-        with torch.no_grad():
-            dataset = self.data_factory_instance.prepare_datasets(test_data)
-            for data in dataset:
-                groundtruth = torch.tensor(data.output)
-                fig, axs = plt.subplots(3, 1)
-                axs[0].plot(groundtruth[:, 0])
-                axs[1].plot(groundtruth[:, 1])
-                axs[2].plot(groundtruth[:, 2])
-                axs[0].legend(["groundtruth", "prediction"]) 
-                axs[0].set_ylabel('f_disturb_x')
-                axs[1].set_ylabel('f_disturb_y')
-                axs[2].set_ylabel('f_disturb_z')
-
+                print(
+                    f"[{epoch + 1}] "
+                    f"loss_phi: {self.loss_phi_trace[-1]:.2f} "
+                    f"loss_h: {self.loss_h_trace[-1]:.2f} "
+                    f"loss_validation: {self.loss_phi_trace_on_validation[-1]:.2f}"
+                    f"\na_trace: {self.a_trace[0][epoch]}"
+                )
 
     def plot_prediction_error(self, error, groundtruth, prediction, title):
         """assumes the output is 3d (fx,fy,fz)"""
@@ -249,65 +280,16 @@ class Trainer:
 
         plt.tight_layout(rect=[0, 0, 1, 0.95])  # Leave space for suptitle        
 
-    def plot_phi_out(self, out: torch.Tensor):
-        dim = out.shape[-1]
-        fig, axs = plt.subplots(dim, 1)
-        for i in range(dim):
-            axs[i].plot(out[:, i])
-            axs[i].set_ylabel(f"phi_out_{i}")
-        axs[-1].set_xlabel('epoch')        
-        
     def plot_loss(self):
-        fig, axs = plt.subplots(2, 1)
+        fig, axs = plt.subplots(3, 1)
         axs[0].plot(self.loss_phi_trace)
         axs[0].set_ylabel('loss_phi_trace [N]')
         axs[1].plot(self.loss_h_trace)
         axs[1].set_ylabel('loss_h_trace')
-        axs[1].set_xlabel('epoch')
+        axs[2].plot(self.loss_phi_trace_on_validation)
+        axs[2].set_ylabel('loss_phi_trace_on_validation [N]')
+        axs[2].set_xlabel('epoch')
 
-    def plot_a(self):
-        # a_trace shape: (num_of_conditions, num_of_iterations, dim_of_feature, dim_of_label)
-        for i in range(len(self.a_trace)):
-            _, row, col = self.a_trace[i].shape
-            fig, axs = plt.subplots(row, col)
-            for j in range(row):
-                for k in range(col):
-                    axs[j,k].plot(self.a_trace[i][:, j, k])
-
-    def plot_tsne_of_a(self, selected_epochs: list[int]):
-        """
-        Visualize the t-SNE of all learned 'a' vectors.
-        Assumes self.a_trace[domain_id] is shape [N, dim_a, dim_y] per domain.
-
-        Args:
-            title (str): Plot title
-            max_points_per_domain (int): To subsample for large traces
-        """
-        all_a = []
-        all_labels = []
-        for domain_id, a_array in enumerate(self.a_trace):
-            # a_array: shape (N, dim_a, dim_y), flatten over last dim
-            valid_indices = [i for i in selected_epochs if i < len(a_array)]
-
-            a_flat = a_array[valid_indices].reshape(len(valid_indices), -1)
-            all_a.append(a_flat)
-            all_labels.append(np.full(len(valid_indices), domain_id))
-
-        X = np.concatenate(all_a, axis=0)
-        Y = np.concatenate(all_labels, axis=0)
-
-        # Run t-SNE
-        X_tsne = TSNE(n_components=2, perplexity=5, learning_rate='auto', init='pca', random_state=0).fit_transform(X)
-
-        # Plot
-        plt.figure(figsize=(12, 8))
-        sns.scatterplot(x=X_tsne[:, 0], y=X_tsne[:, 1], hue=Y, palette='tab10', s=25)
-        plt.title("t-SNE of a")
-        plt.xlabel("t-SNE dim 1")
-        plt.ylabel("t-SNE dim 2")
-        plt.legend(title="Domain", loc='best')
-        plt.grid(True)
-        plt.tight_layout()
 
         
 

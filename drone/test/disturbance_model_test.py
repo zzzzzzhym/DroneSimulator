@@ -18,7 +18,7 @@ class TestWindEffectNearWall(unittest.TestCase):
         torque_control = np.array([0.0, 0.0, 0.0])
         thrust = params.PennStateARILab550().m_wrench_to_thrust@np.hstack((force_control[2], torque_control))
         drone_state.omega = np.array([0.0, 0.0, 0.0])
-        rotor_instance.step_rotor_states(drone_state, thrust)
+        rotor_instance.step_all_rotor_states(drone_state, thrust)
         instance.update_explicit_wrench(t, drone_state, rotor_instance, force_control, torque_control)
         np.testing.assert_array_almost_equal(instance.f_explicit, np.zeros(3), decimal=1)
         np.testing.assert_array_almost_equal(instance.t_explicit, np.zeros(3))
