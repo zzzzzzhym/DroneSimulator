@@ -18,6 +18,7 @@ import dynamics_state as state
 
 class Rotor:
     """This class manage the state of individual rotor and its relationship to the drone. It may include rotor center velocity, rotor position and rotor pose. 
+    The convention is in FLU inertial frame.
     """
     def __init__(self, propeller: propeller.Propeller, relative_position_body_frame: np.ndarray, is_ccw_blade: bool) -> None:
         self.is_ccw_blade = is_ccw_blade
@@ -62,7 +63,7 @@ class RotorSet:
             for position, blade in zip(self.params.rotor_position, self.params.is_ccw_blade)
         ]
 
-    def step_rotor_states(self, drone_state: state, rotation_speeds: np.ndarray) -> None:
+    def step_all_rotor_states(self, drone_state: state, rotation_speeds: np.ndarray) -> None:
         """_summary_
 
         Args:
@@ -70,6 +71,7 @@ class RotorSet:
             thrusts (_type_): vector of thrusts from each rotor. Note that a thrust is a scalar value
         """
         for rotor, speed in zip(self.rotors, rotation_speeds): 
+            # Convert the drone state to FLU frame before passing it to the rotor
             rotor.step_rotor_states(utils.FrdFluConverter.flip_pose(drone_state.get_pose_in_inertial_frame()),  
                                     utils.FrdFluConverter.flip_vector(drone_state.get_position_in_inertial_frame()),
                                     utils.FrdFluConverter.flip_vector(drone_state.get_velocity_in_inertial_frame()),

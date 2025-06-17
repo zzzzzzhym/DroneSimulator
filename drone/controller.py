@@ -48,7 +48,7 @@ class DroneController:
         self.warm_up_count_max = 0
         self.is_using_baseline_disturbance_estimator = True   
         self.is_using_any_disturbance_estimator = True
-        self.is_using_inflow_model = False
+        self.is_using_inflow_model = True
         print("DroneController: using inflow model: ", self.is_using_inflow_model)
         print("DroneController: using disturbance estimator: ", self.is_using_any_disturbance_estimator)
         print("DroneController: using baseline disturbance estimator: ", self.is_using_baseline_disturbance_estimator)

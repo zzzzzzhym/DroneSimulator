@@ -10,51 +10,74 @@ import matplotlib.pyplot as plt
 import model
 import data_factory
 
-class Validator:
-    def __init__(self,
-                 config: dict,
-                 ) -> None:
+
+class Evaluator:
+    def __init__(self) -> None:
         self.phi_net = None
         self.h_net = None
-        self.config = config
-        self.dataset = None
+        self.datasets = None
+        self.condition_labels = None
 
     def load_model(self, phi_net: model.MultilayerNet, h_net: model.MultilayerNet):
         self.phi_net = phi_net
         self.h_net = h_net
 
-    def load_dataset(self, dataset: data_factory.LearningDataset):
-        self.dataset = dataset
+    def load_dataset(self, datasets: list[data_factory.LearningDataset]):
+        self.datasets = datasets
+        self.condition_labels = [dataset.source_file for dataset in datasets]
 
-    def validate_model(self):
-        self.phi_net.eval()
+    def evaluate_model(self, can_show_plot=False):
+        is_in_training = self.phi_net.training
+        if is_in_training:
+            self.phi_net.eval()
         with torch.no_grad():
-            for data in self.dataset:
-                phi_out = self.phi_net(torch.tensor(data.input))
-                print(f"phi_out: {phi_out}")
-                groundtruth = torch.tensor(data.output)
+            mse = []
+            for dataset in self.datasets:
+                phi_out = self.phi_net(torch.tensor(dataset.input))
+                groundtruth = torch.tensor(dataset.output)
                 a = self.get_optimal_a(phi_out, groundtruth)
-                print(f"a = {a}")
                 prediction = self.get_prediction(phi_out, a)
                 error = groundtruth - prediction
                 denormalized_error = self.denormalize(
                     error.numpy(),
-                    data.label_mean_vector,
-                    data.label_scale_vector
+                    dataset.label_mean_vector,
+                    dataset.label_scale_vector
                 )
                 denormalized_groundtruth = self.denormalize(
                     groundtruth.numpy(),
-                    data.label_mean_vector,
-                    data.label_scale_vector
+                    dataset.label_mean_vector,
+                    dataset.label_scale_vector
                 )
                 denormalized_prediction = self.denormalize(
                     prediction.numpy(),
-                    data.label_mean_vector,
-                    data.label_scale_vector
+                    dataset.label_mean_vector,
+                    dataset.label_scale_vector
                 )
-                self.plot_prediction_error(denormalized_error, denormalized_groundtruth, denormalized_prediction, data.source_file)
-                self.plot_phi_out(phi_out)
-                plt.show()
+                mse_per_dataset = self.get_mse_per_label(denormalized_error)
+                mse.append(mse_per_dataset)
+
+                if can_show_plot:
+                    print(f"phi_out: {phi_out}")
+                    print(f"a = {a}")
+                    self.plot_prediction_error(denormalized_error, denormalized_groundtruth, denormalized_prediction, dataset.source_file)
+                    self.plot_phi_out(phi_out)
+                    plt.show()            
+        if is_in_training:
+            self.phi_net.train()
+        return mse
+
+    def test_model(self):
+        mse = self.evaluate_model(can_show_plot=True)
+        rms = np.sqrt(np.array(mse))  # convert mse to rms
+        self.plot_rms_grouped_by_dimension(rms)
+        self.plot_mse_grouped_by_dimension(mse)
+
+    def callback_validation(self):
+        mse = self.evaluate_model(can_show_plot=False)
+        result = 0.0
+        for mse_per_condition in mse:
+            result += np.mean(mse_per_condition)
+        return result / len(mse)
 
     @staticmethod
     def denormalize(normalized: np.ndarray, mean: np.ndarray, scale: np.ndarray) -> np.ndarray:
@@ -83,15 +106,73 @@ class Validator:
     def get_prediction(phi, a):
         return torch.mm(phi, a)    
     
+    def get_mse_per_label(self, error):
+        if isinstance(error, torch.Tensor):
+            error = error.detach().cpu().numpy()
+        mse = np.mean(error**2, axis=0)
+        return mse
+
+    def get_rms_error(self, error):        
+        rms_per_dim = np.sqrt(self.get_mse_per_label(error)) 
+        return rms_per_dim
+
+    def plot_rms_grouped_by_dimension(self, rms_list):
+        rms_array = np.array(rms_list)  # shape: (num_conditions, num_dims)
+        num_conditions, num_dims = rms_array.shape
+
+        x = np.arange(num_conditions)  # x axis positions per condition
+        width = 0.8 / num_dims  # space out bars within a group
+
+        plt.figure(figsize=(12, 6))
+        for dim in range(num_dims):
+            print(f"average rms for dim {dim}: {np.mean(rms_array[:, dim])}")
+            plt.bar(x + dim * width, rms_array[:, dim], width=width, label=f'Dim {dim}')
+
+        # Labeling
+        plt.xticks(
+            x + width * (num_dims - 1) / 2,
+            self.condition_labels,
+            rotation=90
+        )
+
+        plt.title("RMS Error per Condition (Grouped by Output Dimension)")
+        plt.xlabel("Condition")
+        plt.ylabel("RMS Error")
+        plt.legend(title="Output Dim")
+        plt.grid(axis='y')
+        plt.tight_layout()
+        plt.show()
+
+    def plot_mse_grouped_by_dimension(self, mse_list):
+        mse_array = np.array(mse_list)  # shape: (num_conditions, num_dims)
+        num_conditions, num_dims = mse_array.shape
+
+        x = np.arange(num_conditions)  # x axis positions per condition
+        width = 0.8 / num_dims  # space out bars within a group
+
+        plt.figure(figsize=(12, 6))
+        for dim in range(num_dims):
+            print(f"average mse for dim {dim}: {np.mean(mse_array[:, dim])}")
+            plt.bar(x + dim * width, mse_array[:, dim], width=width, label=f'Dim {dim}')
+
+        # Labeling
+        plt.xticks(
+            x + width * (num_dims - 1) / 2,
+            self.condition_labels,
+            rotation=90
+        )
+        plt.title("MSE Error per Condition (Grouped by Output Dimension)")
+        plt.xlabel("Condition")
+        plt.ylabel("MSE Error")
+        plt.legend(title="Output Dim")
+        plt.grid(axis='y')
+        plt.tight_layout()
+        plt.show()
+
     def plot_prediction_error(self, error, groundtruth, prediction, title):
         """assumes the output is 3d (fx,fy,fz)"""
         # check dimensions
         dim = groundtruth.shape[-1]
-        abs_error = np.abs(error.detach().cpu().numpy()) if isinstance(error, torch.Tensor) else np.abs(error)
-        p90 = np.percentile(abs_error, 90, axis=0)
-        rms_per_dim = np.sqrt(np.mean(abs_error**2, axis=0)) 
-        print(f"RMS: {rms_per_dim}")
-        print(f"P90: {p90}")
 
         fig, axs = plt.subplots(3, 2, figsize=(10, 6))
 
@@ -118,6 +199,10 @@ class Validator:
         dim = out.shape[-1]
         fig, axs = plt.subplots(dim, 1)
         for i in range(dim):
-            axs[i].plot(out[:, i])
-            axs[i].set_ylabel(f"phi_out_{i}")
-        axs[-1].set_xlabel('epoch')        
+            if dim == 1:
+                ax = axs
+            else:
+                ax = axs[i]
+            ax.plot(out[:, i])
+            ax.set_ylabel(f"phi_out_{i}")
+        ax.set_xlabel('epoch')

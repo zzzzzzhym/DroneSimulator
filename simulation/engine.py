@@ -113,5 +113,7 @@ class Engine:
             logger.buffer["rotor_2_velocity"].append(self.scenario.dynamics.rotors.rotors[2].velocity_inertial_frame)
             logger.buffer["rotor_3_velocity"].append(self.scenario.dynamics.rotors.rotors[3].velocity_inertial_frame)
             logger.buffer["b_1d"].append(self.scenario.trajectory.b_1d)
+            logger.buffer["f_propeller"].append(self.scenario.dynamics.disturbance.f_propeller)
+            logger.buffer["f_body"].append(self.scenario.dynamics.disturbance.f_body)
 
 

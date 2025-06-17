@@ -47,7 +47,7 @@ class PhiNet(MultilayerNet):
         self.register_buffer("output_scale", torch.tensor(output_scale, dtype=torch.float32))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Normalize input, assuming x is raw input
+        # Normalize input, assuming x is raw input <- should not do that. dataset is already normalized. Todo: check inference implementation
         x = (x - self.input_mean) * self.input_scale
 
         for layer in self.layers[:-1]:
@@ -55,17 +55,17 @@ class PhiNet(MultilayerNet):
         x = self.layers[-1](x)
         if len(x.shape) == 1:
             # single input (batch size == 1)
-            return torch.cat([x, torch.ones(1)])
+            one = torch.ones(1, device=x.device)
+            return torch.cat([one, x])
         else:
             # batch input for training (assuming that x is at most 2D)
-            return torch.cat([x, torch.ones([x.shape[0], 1])], dim=-1)
+            ones = torch.ones([x.shape[0], 1], device=x.device)
+            return torch.cat([ones, x], dim=-1)
         
-
 class HNet(MultilayerNet):
     """Follow NeuroFly Nomenclature"""
     def __init__(self, dim_of_input, dim_of_output, dim_of_layers: list):
         super().__init__(dim_of_input, dim_of_output, dim_of_layers, can_append_bias=False)        
-
     
 class ModelFactory:
     def __init__(self,

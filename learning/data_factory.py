@@ -113,7 +113,7 @@ class DataFactory:
 
     def convert_sim_to_training_data(self, sim_data: np.ndarray, condition_id: int, file: str) -> LearningDataset:
         # normalize data before putting it into the dataset
-        result = LearningDataset((sim_data[:, self.input_columns] - self.input_mean_vector)*self.input_scale_vector, 
+        result = LearningDataset(sim_data[:, self.input_columns],   # input normalization will be done in the network
                                  (sim_data[:, self.label_columns] - self.label_mean_vector)*self.label_scale_vector,
                                  condition_id,
                                  self.input_mean_vector,
@@ -123,7 +123,7 @@ class DataFactory:
                                  file)
         return result
 
-    def prepare_datasets(self, data_menu: list, can_inspect_data: bool=True) -> list[LearningDataset]:
+    def prepare_datasets(self, data_menu: list, can_inspect_data: bool=False) -> list[LearningDataset]:
         """Prepare the datasets from the data menu
         Each file in the data menu is a different condition, the length of the dataset is the number of conditions"""
         datasets = []
@@ -140,12 +140,35 @@ class DataFactory:
     def get_data_loaders(self, training_data: LearningDataset) -> tuple[DataLoader, DataLoader]:
         """Separate the dataset into two parts: part1 for phi NN and part2 for adaptation coeffecients, 
         generate a data loader for each part"""
-        length = len(training_data)
+        length = int(len(training_data)*self.config["data_usage_ratio"])
+        print(f"Using {length} samples from the dataset for training", f"from source file: {training_data.source_file}")
         ratio = self.config["phi_shot"]/(self.config["phi_shot"] + self.config["a_shot"])
         part_phi = int(length*ratio)
         part_a = length - part_phi
-        phi_set, a_set = random_split(training_data, [part_phi, part_a])
-        phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=self.config["phi_shot"], shuffle=True)
+        if self.config["can_shuffle"]:
+            phi_set, a_set, _ = random_split(training_data, [part_phi, part_a, len(training_data) - part_phi - part_a])
+        else:
+            phi_input = training_data.input[:part_phi]
+            phi_output = training_data.output[:part_phi]
+            a_input = training_data.input[part_phi:part_phi + part_a]
+            a_output = training_data.output[part_phi:part_phi + part_a]
+
+            phi_set = LearningDataset(phi_input, phi_output, 
+                                      training_data.c,
+                                      training_data.input_mean_vector,
+                                      training_data.input_scale_vector,
+                                      training_data.label_mean_vector,
+                                      training_data.label_scale_vector,
+                                      training_data.source_file)
+
+            a_set = LearningDataset(a_input, a_output, 
+                                    training_data.c,
+                                    training_data.input_mean_vector,
+                                    training_data.input_scale_vector,
+                                    training_data.label_mean_vector,
+                                    training_data.label_scale_vector,
+                                    training_data.source_file)
+        phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=self.config["phi_shot"], shuffle=self.config["can_shuffle"])
         a_loader = torch.utils.data.DataLoader(a_set, batch_size=self.config["a_shot"], shuffle=True)
         return phi_loader, a_loader
 
@@ -159,9 +182,9 @@ class DataFactory:
             a_set.append(a_loader)
         return phi_set, a_set
 
-    def get_data(self) -> tuple[list[DataLoader], list[DataLoader]]:
+    def get_data(self, can_inspect_data: bool=False) -> tuple[list[DataLoader], list[DataLoader]]:
         """Main API of DataFactory"""
-        datasets = self.prepare_datasets(self.data_menu)
+        datasets = self.prepare_datasets(self.data_menu, can_inspect_data)
         phi_set, a_set = self.prepare_loadersets(datasets)
         return phi_set, a_set
     

@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from learning import trainer
+from learning import training_manager
 
 class UnitDisturbance:
     """disturbance in a single dimension
@@ -116,9 +116,9 @@ class UnitDisturbance:
 
 class DisturbanceEstimator:
     def __init__(self, model_name: str, dt: float) -> None:
-        self.phi, h, self.config = trainer.load_model(model_name)
+        self.phi, h = training_manager.load_model(model_name)
         self.phi.eval()
-        self.num_of_kernals = self.config["phi_net_input_args"]["dim_of_output"]
+        self.num_of_kernals = self.phi.dim_of_output
         self.dof_of_disturbance = 6
         self.dt = 0.01
         self.f_x = UnitDisturbance(self.num_of_kernals, self.dt, self.phi.output_mean[0].numpy(), self.phi.output_scale[0].numpy())

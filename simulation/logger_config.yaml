@@ -322,3 +322,17 @@ rotor_3_rotation_spd_delayed:
   components: []
   can_save_to_file: false
   is_label: false
+f_propeller:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: false
+  is_label: false
+f_body:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: false
+  is_label: false
