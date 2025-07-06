@@ -125,7 +125,7 @@ class PropellerLookupTable:
                               f"omega: {omega} (clipped: {omega_clipped})")
             return self.interpolator((u_free_x_clipped, pitch_clipped, omega_clipped))
         
-        def get_rotor_forces(self, u_free: np.ndarray, v_forward: np.ndarray, r_disk: np.ndarray, omega: float, is_ccw_blade: bool):
+        def get_rotor_forces(self, u_free: np.ndarray, v_forward: np.ndarray, r_disk: np.ndarray, omega: float, is_ccw_blade: bool) -> tuple[np.ndarray, np.ndarray]:
             """_summary_
 
             Args:
@@ -136,7 +136,7 @@ class PropellerLookupTable:
                 is_ccw_blade (bool): True if the blade rotates counter-clockwise from bird view (opposite to z axis body frame)
 
             Returns:
-                _type_: _description_
+                tuple[np.ndarray, np.ndarray]: forces in inertial frame and induced velocity in inertial frame
             """
             u_relative_wind = u_free - v_forward
             u_relative_norm = np.linalg.norm(u_relative_wind)
