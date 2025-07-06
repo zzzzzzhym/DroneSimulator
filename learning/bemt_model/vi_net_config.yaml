@@ -1,0 +1,8 @@
+# in development
+ViNet:
+  hidden_layer_dimensions:
+    - 50
+    - 60
+    - 50
+  
+dim_of_output: 4
