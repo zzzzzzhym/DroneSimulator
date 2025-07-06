@@ -336,3 +336,71 @@ f_body:
     - z
   can_save_to_file: false
   is_label: false
+rotor_0_local_wind_velocity:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: true
+  is_label: false
+rotor_1_local_wind_velocity:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: true
+  is_label: false
+rotor_2_local_wind_velocity:
+  components:
+    - x
+    - y
+    - z 
+  can_save_to_file: true
+  is_label: false
+rotor_3_local_wind_velocity:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: true
+  is_label: false
+rotor_0_f_rotor_inertial_frame:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: true
+  is_label: false
+rotor_1_f_rotor_inertial_frame:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: true
+  is_label: false
+rotor_2_f_rotor_inertial_frame:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: true
+  is_label: false
+rotor_3_f_rotor_inertial_frame:
+  components:
+    - x
+    - y
+    - z
+  can_save_to_file: true
+  is_label: false
+shared_r_disk:
+  components: 
+    - a11
+    - a12
+    - a13
+    - a21
+    - a22
+    - a23
+    - a31
+    - a32
+    - a33
+  can_save_to_file: true

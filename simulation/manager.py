@@ -41,8 +41,11 @@ class Manager:
         self.logger.convert_buffer_to_output()
         self.result = plotter.Plotter(self.engine.t_span, self.engine.dt_log)
 
-    def save_result(self, file_name: str) -> None:
-        self.logger.log_sim_result(file_name)
+    def save_result_as_csv(self, file_name: str) -> None:
+        self.logger.log_sim_result(file_name, 'csv')
+
+    def save_result_as_pkl(self, file_name: str) -> None:
+        self.logger.log_sim_result(file_name, 'pkl')
 
     def plot(self) -> None:
         self.result.make_plots(self.logger.output)

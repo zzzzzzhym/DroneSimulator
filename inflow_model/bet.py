@@ -13,10 +13,10 @@ class BladeElementTheory:
         Gill, Rajan, and Raffaello D'andrea. "Propeller thrust and drag in forward flight." 
         2017 IEEE Conference on control technology and applications (CCTA). IEEE, 2017.
     """    
-    def __init__(self, blade: Blade):
+    def __init__(self, blade: Blade, num_of_elements=100, num_of_rotation_segments=90):
         self.blade = blade
-        self.num_of_elements = 100
-        self.num_of_rotation_segments = 90
+        self.num_of_elements = num_of_elements
+        self.num_of_rotation_segments = num_of_rotation_segments
         self.coeff = aero_coeff.Coeffecients(cl_1=self.blade.cl_1, cl_2=self.blade.cl_2, alpha_0=self.blade.alpha_0, cd=self.blade.cd, cd_0=self.blade.cd_0)
         self.dy = self.blade.y_max/self.num_of_elements
         self.disk_area = np.pi*(self.blade.y_max**2 - self.blade.y_min**2)  # rotor disk area
@@ -221,9 +221,12 @@ class BladeElementTheory:
     def guess_initial_v_i(self, y: float, omega_blade: float, is_ccw_blade=True):
         """Make initial guess based on static thrust model."""
         rpm_to_rad_per_sec = 2*np.pi/60
-
+        if is_ccw_blade:
+            omega_blade_in_rpm = omega_blade/rpm_to_rad_per_sec
+        else:
+            omega_blade_in_rpm = -omega_blade/rpm_to_rad_per_sec
         thrust_lbf = np.interp(
-            omega_blade/rpm_to_rad_per_sec,
+            omega_blade_in_rpm,
             APC_8x6_OfficialData.OMEGA_APC8X6_OFFICIAL_DATA_RPM,
             APC_8x6_OfficialData.THRUST_APC8X6_OFFICIAL_DATA_LBF
         )
@@ -262,7 +265,7 @@ class BladeElementTheory:
             u_free (np.ndarray): Free stream velocity in the inertial frame.
             v_forward (np.ndarray): Disk velocity in the inertial frame.
             r_disk (np.ndarray): Disk rotation matrix.
-            omega_blade (float): Rotation speed of the blade in rad/s.
+            omega_blade (float): Rotation speed of the blade in rad/s. In nominal conditions, ccw blade is positive, and cw blade is negative.
             is_ccw_blade (bool, optional): Indicates if the blade is counter-clockwise. Defaults to True.
 
         Returns:
