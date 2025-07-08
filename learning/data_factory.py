@@ -49,6 +49,84 @@ class LearningDataset(Dataset):
         return sample
 
 
+class FittingDataset:
+    """Dataset for fitting the model parameters"""
+    def __init__(self, input: dict, output: dict) -> None:
+        self.u_free_0 = input["u_free_0"]
+        self.v_forward_0 = input["v_forward_0"]
+        self.r_disk_0 = input["r_disk_0"]
+        self.omega_0 = input["omega_0"]
+
+        self.u_free_1 = input["u_free_1"]
+        self.v_forward_1 = input["v_forward_1"]
+        self.r_disk_1 = input["r_disk_1"]
+        self.omega_1 = input["omega_1"]
+
+        self.u_free_2 = input["u_free_2"]
+        self.v_forward_2 = input["v_forward_2"]
+        self.r_disk_2 = input["r_disk_2"]
+        self.omega_2 = input["omega_2"]
+
+        self.u_free_3 = input["u_free_3"]
+        self.v_forward_3 = input["v_forward_3"]
+        self.r_disk_3 = input["r_disk_3"]
+        self.omega_3 = input["omega_3"]
+
+        self.f_x = output["f_x"]
+        self.f_y = output["f_y"]
+        self.f_z = output["f_z"]
+        self.torque_x = output["torque_x"]
+        self.torque_y = output["torque_y"]
+        self.torque_z = output["torque_z"]
+
+class FittingFactory:
+    def __init__(self, data_file: str, column_map_file: str) -> None:
+        self.data_file = data_file
+        self.column_map = FittingFactory.get_map(column_map_file)
+        
+    def find_data_by_column(self, column_name: str):
+        """Find the data files that contain the given column name"""
+        if column_name in self.column_map:
+            return self.column_map[column_name]
+        else:
+            return None
+
+    @staticmethod
+    def get_map(map_file: str) -> dict:
+        map_file_path = FittingFactory.get_path_to_data_file(map_file)
+        with open(map_file_path, 'r') as file:
+            map = yaml.safe_load(file)
+        return map
+
+    @staticmethod
+    def get_path_to_data_file(file_name: str) -> str:
+        """Get the path to the data file"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        upper_dir = os.path.dirname(current_dir)
+        file_path = os.path.join(upper_dir, "data", "training", file_name)
+        return file_path
+
+    @staticmethod
+    def load_config(config_file: str):
+        """Load configuration from YAML file"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(current_dir, config_file)
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+        return config    
+
+    @staticmethod
+    def load_sim_data(file_name: str) -> np.ndarray:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(os.path.dirname(current_dir), "data", "training", file_name)
+        if os.path.exists(file_path):
+            # Load the data from the CSV file, skipping the first row (header)
+            sim_data = np.genfromtxt(file_path, delimiter=',', skip_header=1)
+            return sim_data
+        else:
+            raise ValueError("No such file: " + file_path)
+    
+
 class DataFactory:
     """Data manager is responsible for:
     1. defining the list of data to be used to train
