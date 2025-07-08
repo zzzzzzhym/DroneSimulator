@@ -3,6 +3,7 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import yaml
+import pickle
 
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -49,6 +50,72 @@ class LearningDataset(Dataset):
         return sample
 
 
+class FittingDataset:
+    """Dataset for fitting the model parameters"""
+    def __init__(self, pickled_data: dict) -> None:
+        self.u_free_0 = pickled_data["rotor_0_local_wind_velocity"]
+        self.v_forward_0 = pickled_data["rotor_0_velocity"]
+        self.omega_0 = pickled_data["rotor_0_rotation_spd"]
+
+        self.u_free_1 = pickled_data["rotor_1_local_wind_velocity"]
+        self.v_forward_1 = pickled_data["rotor_1_velocity"]
+        self.omega_1 = pickled_data["rotor_1_rotation_spd"]
+
+        self.u_free_2 = pickled_data["rotor_2_local_wind_velocity"]
+        self.v_forward_2 = pickled_data["rotor_2_velocity"]
+        self.omega_2 = pickled_data["rotor_2_rotation_spd"]
+
+        self.u_free_3 = pickled_data["rotor_3_local_wind_velocity"]
+        self.v_forward_3 = pickled_data["rotor_3_velocity"]
+        self.omega_3 = pickled_data["rotor_3_rotation_spd"]
+
+        self.shared_r_disk = pickled_data["shared_r_disk"]
+
+        self.rotor_0_f_rotor_inertial_frame = pickled_data["rotor_0_f_rotor_inertial_frame"]
+        self.rotor_1_f_rotor_inertial_frame = pickled_data["rotor_1_f_rotor_inertial_frame"]
+        self.rotor_2_f_rotor_inertial_frame = pickled_data["rotor_2_f_rotor_inertial_frame"]
+        self.rotor_3_f_rotor_inertial_frame = pickled_data["rotor_3_f_rotor_inertial_frame"]
+
+        self.f_x = pickled_data["f_disturb"]
+        self.f_y = pickled_data["torque_disturb"]
+        self.dv = pickled_data["dv"]
+        self.omega = pickled_data["omega"]
+        self.omega_dot = pickled_data["omega_dot"]
+
+
+class FittingFactory:
+    def __init__(self) -> None:
+        pass
+
+    @staticmethod
+    def get_path_to_data_file(file_name: str) -> str:
+        """Get the path to the data file"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        upper_dir = os.path.dirname(current_dir)
+        file_path = os.path.join(upper_dir, "data", "training", file_name)
+        return file_path  
+
+    @staticmethod
+    def load_sim_data(file_name: str) -> np.ndarray:
+        file_path = FittingFactory.get_path_to_data_file(file_name)
+        if os.path.exists(file_path):
+            # Load the data from the pkl file
+            with open(file_path, 'rb') as file:
+                sim_data = pickle.load(file)
+            return sim_data
+        else:
+            raise ValueError("No such file: " + file_path)
+        
+    def prepare_datasets(self, data_menu: list) -> FittingDataset:
+        """Prepare the datasets from the data menu
+        Each file in the data menu is a different condition, the length of the dataset is the number of conditions"""
+        datasets = []
+        for file in data_menu:
+            data = FittingFactory.load_sim_data(file)
+            dataset = FittingDataset(data)
+            datasets.append(dataset)
+        return datasets
+    
 class DataFactory:
     """Data manager is responsible for:
     1. defining the list of data to be used to train
@@ -275,5 +342,16 @@ class DataFactory:
             fig.delaxes(axes[j])
         fig.suptitle(title)
 
+def generate_data_list(subfolder, file_extension=".csv") -> list[str]:
+    """
+    Generate a list of data files in the specified subfolder.
+    """
+    folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "training", subfolder)
+    file_names = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
 
+    # Filter out files that do not end with the specified file extension
+    file_names = [f for f in file_names if f.endswith(file_extension)]
+    # add subfolder to the file names
+    data_list = [os.path.join(subfolder, f) for f in file_names]
+    return data_list
 

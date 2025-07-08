@@ -1,6 +1,7 @@
 import os
 import yaml
 import numpy as np
+import pickle
 
 
 class Logger:
@@ -54,24 +55,32 @@ class Logger:
         data = np.hstack([self.output[key] for key in items])
         return first_line, data
 
-    def log_sim_result(self, file_name: str) -> None:
+    def log_sim_result(self, file_name: str, type: str) -> None:
+        if type == 'csv':
+            suffix = ".csv"
+        elif type == 'pkl':
+            suffix = ".pkl"
         current_dir = os.path.dirname(os.path.abspath(__file__))
         upper_dir = os.path.dirname(current_dir)
-        file_path = os.path.join(upper_dir, "data", "training", file_name+".csv")
+        file_path = os.path.join(upper_dir, "data", "training", file_name + suffix)
         if not os.path.exists(file_path):
-            first_line, array = self.construct_csv_array()
-            np.savetxt(file_path, array, delimiter=',', fmt='%.17f', header=first_line, comments='')
+            if type == 'csv':
+                first_line, array = self.construct_csv_array()
+                np.savetxt(file_path, array, delimiter=',', fmt='%.17f', header=first_line, comments='')
+            elif type == 'pkl':
+                with open(file_path, "wb") as f:
+                    pickle.dump(self.buffer, f)
             print("Sim data is written into:\n" + os.path.relpath(file_path, os.getcwd()))
         else:
             raise ValueError("File already exist:\n" + file_path)
 
-    def generate_data_map(self) -> dict:
+    def generate_column_map(self) -> dict:
         """Generate a dictionary that maps the keys in the buffer to their corresponding components.
         This is used to generate the header for the CSV file."""
         _, headers = self.get_items_to_csv()
         header_map = {header: idx for idx, header in enumerate(headers)}
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        map_file_path = os.path.join(current_dir, "data_map.yaml")
+        map_file_path = os.path.join(current_dir, "column_map.yaml")
         with open(map_file_path, "w") as f:
             for key, value in header_map.items():
                 yaml.dump({key: value}, f)
