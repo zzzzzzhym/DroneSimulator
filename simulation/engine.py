@@ -119,5 +119,6 @@ class Engine:
             logger.buffer["rotor_1_local_wind_velocity"].append(self.scenario.dynamics.rotors.rotors[1].local_wind_velocity)
             logger.buffer["rotor_2_local_wind_velocity"].append(self.scenario.dynamics.rotors.rotors[2].local_wind_velocity)
             logger.buffer["rotor_3_local_wind_velocity"].append(self.scenario.dynamics.rotors.rotors[3].local_wind_velocity)
+            logger.buffer["shared_r_disk"].append(self.scenario.dynamics.rotors.rotors[0].pose)
 
 

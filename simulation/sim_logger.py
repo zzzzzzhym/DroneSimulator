@@ -74,13 +74,13 @@ class Logger:
         else:
             raise ValueError("File already exist:\n" + file_path)
 
-    def generate_data_map(self) -> dict:
+    def generate_column_map(self) -> dict:
         """Generate a dictionary that maps the keys in the buffer to their corresponding components.
         This is used to generate the header for the CSV file."""
         _, headers = self.get_items_to_csv()
         header_map = {header: idx for idx, header in enumerate(headers)}
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        map_file_path = os.path.join(current_dir, "data_map.yaml")
+        map_file_path = os.path.join(current_dir, "column_map.yaml")
         with open(map_file_path, "w") as f:
             for key, value in header_map.items():
                 yaml.dump({key: value}, f)

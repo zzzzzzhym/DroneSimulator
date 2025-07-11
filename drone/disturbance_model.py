@@ -237,7 +237,7 @@ class WindEffectNearWall(DisturbanceForce):
     def step_delayed_rotation_speed(self, rotor_set: rotor.RotorSet) -> None:
         """This function low pass filter the rotation speed
         """
-        alpha = 0.95 # amount of delay
+        alpha = 0.0 # amount of delay
         if self.delayed_rotor_set_speed is None:
             self.delayed_rotor_set_speed = []
             for rotor in rotor_set.rotors:

@@ -13,10 +13,10 @@ class BladeElementTheory:
         Gill, Rajan, and Raffaello D'andrea. "Propeller thrust and drag in forward flight." 
         2017 IEEE Conference on control technology and applications (CCTA). IEEE, 2017.
     """    
-    def __init__(self, blade: Blade):
+    def __init__(self, blade: Blade, num_of_elements=100, num_of_rotation_segments=90):
         self.blade = blade
-        self.num_of_elements = 100
-        self.num_of_rotation_segments = 90
+        self.num_of_elements = num_of_elements
+        self.num_of_rotation_segments = num_of_rotation_segments
         self.coeff = aero_coeff.Coeffecients(cl_1=self.blade.cl_1, cl_2=self.blade.cl_2, alpha_0=self.blade.alpha_0, cd=self.blade.cd, cd_0=self.blade.cd_0)
         self.dy = self.blade.y_max/self.num_of_elements
         self.disk_area = np.pi*(self.blade.y_max**2 - self.blade.y_min**2)  # rotor disk area
