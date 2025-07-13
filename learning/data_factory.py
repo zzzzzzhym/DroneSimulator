@@ -71,6 +71,11 @@ class FittingDataset:
 
         self.shared_r_disk = pickled_data["shared_r_disk"]
 
+        self.rotor_0_f_rotor_inertial_frame = pickled_data["rotor_0_f_rotor_inertial_frame"]
+        self.rotor_1_f_rotor_inertial_frame = pickled_data["rotor_1_f_rotor_inertial_frame"]
+        self.rotor_2_f_rotor_inertial_frame = pickled_data["rotor_2_f_rotor_inertial_frame"]
+        self.rotor_3_f_rotor_inertial_frame = pickled_data["rotor_3_f_rotor_inertial_frame"]
+
         self.f_x = pickled_data["f_disturb"]
         self.f_y = pickled_data["torque_disturb"]
         self.dv = pickled_data["dv"]

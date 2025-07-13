@@ -41,79 +41,90 @@ class FittedBlade(Blade):
         return result
 
 def compute_model_thrust(u_free, v_forward, r_disk, omega, is_ccw_blade, bet_instance: BladeElementTheory):
-    f_x, f_y, f_z, v_i = bet_instance.get_rotor_forces(u_free, v_forward, r_disk, omega, is_ccw_blade)
+    if is_ccw_blade:
+        f_x, f_y, f_z, v_i = bet_instance.get_rotor_forces(u_free, v_forward, r_disk, omega, is_ccw_blade)
+    else:
+        f_x, f_y, f_z, v_i = bet_instance.get_rotor_forces(u_free, v_forward, r_disk, -omega, is_ccw_blade) # negative omega for CW rotation, this is an interface mismatch
     return np.array([f_x, f_y, f_z])
 
-def get_loss(x, dataset: data_factory.FittingDataset, blade: FittedBlade, can_collect_data_to_plot=False):
-    loss = 0.0
+def get_loss(x, datasets: list[data_factory.FittingDataset], blade: FittedBlade, can_collect_data_to_plot=False):
     params = parameters.PennStateARILab550()
     cl_1, cl_2, cd, alpha_0 = x
     blade.cl_1 = cl_1
     blade.cl_2 = cl_2
     blade.cd = cd
     blade.alpha_0 = alpha_0    
-    data_len = len(dataset.u_free_0)
     sample_distance = 100
-    bet_instance = BladeElementTheory(blade, num_of_elements=100, num_of_rotation_segments=90)
-    if can_collect_data_to_plot:
-        data = {"i": [], "f_0": [], "f_1": [], "f_2": [], "f_3": [], "f_total": []}
-    for i in range(0, data_len, sample_distance):
-        f_0 = compute_model_thrust(dataset.u_free_0[i], 
-                                 dataset.v_forward_0[i], 
-                                 dataset.shared_r_disk[i], 
-                                 dataset.omega_0[i], 
-                                 params.is_ccw_blade[0],
-                                 bet_instance)
-        # torque_0 = np.cross(dataset.relative_position_inertial_frame_0[i], f_0)
+    bet_instance = BladeElementTheory(blade, num_of_elements=10, num_of_rotation_segments=9)
 
-        f_1 = compute_model_thrust(dataset.u_free_1[i], 
-                                 dataset.v_forward_1[i], 
-                                 dataset.shared_r_disk[i], 
-                                 dataset.omega_1[i], 
-                                 params.is_ccw_blade[1],
-                                 bet_instance)
-        # torque_1 = np.cross(dataset.relative_position_inertial_frame_1[i], f_1)
-
-        f_2 = compute_model_thrust(dataset.u_free_2[i], 
-                                 dataset.v_forward_2[i], 
-                                 dataset.shared_r_disk[i], 
-                                 dataset.omega_2[i], 
-                                 params.is_ccw_blade[2],
-                                 bet_instance)
-        # torque_2 = np.cross(dataset.relative_position_inertial_frame_2[i], f_2)
-
-        f_3 = compute_model_thrust(dataset.u_free_3[i], 
-                                 dataset.v_forward_3[i], 
-                                 dataset.shared_r_disk[i], 
-                                 dataset.omega_3[i], 
-                                 params.is_ccw_blade[3],
-                                 bet_instance)
-        # torque_3 = np.cross(dataset.relative_position_inertial_frame_3[i], f_3)
-
-        f = f_0 + f_1 + f_2 + f_3
-        f = utils.FrdFluConverter.flip_vector(f)
+    loss = 0.0
+    for dataset in datasets:
         if can_collect_data_to_plot:
-            data["i"].append(i)
-            data["f_0"].append(f_0)
-            data["f_1"].append(f_1)
-            data["f_2"].append(f_2)
-            data["f_3"].append(f_3)
-            data["f_total"].append(f)
-        loss_f = np.linalg.norm(utils.FrdFluConverter.flip_vector(dataset.shared_r_disk[i]@f) + params.m * parameters.Environment.g*np.array([0.0, 0.0, 1.0]) - params.m * dataset.dv[i])**2
-        loss += loss_f
-    if can_collect_data_to_plot:
-        plot_the_fit(data, dataset)
-    loss = loss/data_len*sample_distance
+            data = {"i": [], "f_0": [], "f_1": [], "f_2": [], "f_3": [], "f_total": [], "f_inertial_frame_frd": []}
+        data_len = len(dataset.u_free_0)
+        loss_per_data_set = 0.0
+        for i in range(0, data_len, sample_distance):
+            f_0 = compute_model_thrust(dataset.u_free_0[i], 
+                                    dataset.v_forward_0[i], 
+                                    dataset.shared_r_disk[i], 
+                                    dataset.omega_0[i], 
+                                    params.is_ccw_blade[0],
+                                    bet_instance)
+            # torque_0 = np.cross(dataset.relative_position_inertial_frame_0[i], f_0)
+
+            f_1 = compute_model_thrust(dataset.u_free_1[i], 
+                                    dataset.v_forward_1[i], 
+                                    dataset.shared_r_disk[i], 
+                                    dataset.omega_1[i], 
+                                    params.is_ccw_blade[1],
+                                    bet_instance)
+            # torque_1 = np.cross(dataset.relative_position_inertial_frame_1[i], f_1)
+
+            f_2 = compute_model_thrust(dataset.u_free_2[i], 
+                                    dataset.v_forward_2[i], 
+                                    dataset.shared_r_disk[i], 
+                                    dataset.omega_2[i], 
+                                    params.is_ccw_blade[2],
+                                    bet_instance)
+            # torque_2 = np.cross(dataset.relative_position_inertial_frame_2[i], f_2)
+
+            f_3 = compute_model_thrust(dataset.u_free_3[i], 
+                                    dataset.v_forward_3[i], 
+                                    dataset.shared_r_disk[i], 
+                                    dataset.omega_3[i], 
+                                    params.is_ccw_blade[3],
+                                    bet_instance)
+            # torque_3 = np.cross(dataset.relative_position_inertial_frame_3[i], f_3)
+
+            f = f_0 + f_1 + f_2 + f_3
+            f = f
+            f_inertial_frame_frd = utils.FrdFluConverter.flip_vector(dataset.shared_r_disk[i]@f)
+            if can_collect_data_to_plot:
+                data["i"].append(i)
+                data["f_0"].append(f_0)
+                data["f_1"].append(f_1)
+                data["f_2"].append(f_2)
+                data["f_3"].append(f_3)
+                data["f_total"].append(f)
+                data["f_inertial_frame_frd"].append(f_inertial_frame_frd)
+            loss_f = np.linalg.norm(f_inertial_frame_frd + params.m * parameters.Environment.g*np.array([0.0, 0.0, 1.0]) - params.m * dataset.dv[i])**2
+            loss_per_data_set += loss_f
+        num_of_samples_per_dataset = data_len / sample_distance
+        loss_per_data_set = loss_per_data_set / num_of_samples_per_dataset
+        loss += loss_per_data_set
+        if can_collect_data_to_plot:
+            plot_the_fit(data, dataset)
+    loss = loss / len(datasets)
     print(f"Current loss: {loss}")
     return loss
 
-def fit_params(dataset, blade: FittedBlade):
+def fit_params(datasets: list[data_factory.FittingDataset], blade: FittedBlade):
     
     # Initial guess for cl_1, cl_2, cd, alpha_0
-    initial_guess = np.array([blade.cl_1, blade.cl_2, blade.cd, blade.alpha_0])*1.0
+    initial_guess = np.array([blade.cl_1, blade.cl_2, blade.cd, blade.alpha_0])*0.5
     print("Initial guess:", initial_guess)
     # Define the bounds for each parameter
-    bounds = [(0.0, 10.0), (0.0, 10.0), (0.0, 5.0), (np.radians(0), np.radians(45))]
+    bounds = [(2.0, 10.0), (0.0, 5.0), (0.0, 5.0), (np.radians(10), np.radians(40))]
 
     trace = []
     step_counter = {"count": 0}  # mutable so it can persist across callback calls
@@ -128,11 +139,13 @@ def fit_params(dataset, blade: FittedBlade):
     result = minimize(
         get_loss,
         initial_guess,
-        args=(dataset, blade),
+        args=(datasets, blade),
         bounds=bounds,
         callback=record_and_print,
         method='Nelder-Mead',
-        options={'disp': True, 'maxiter': 200}
+        options={'disp': True, 
+                 'maxiter': 200,
+                 'fatol': 1e-1}
     )
 
     if result.success:
@@ -147,28 +160,59 @@ def fit_params(dataset, blade: FittedBlade):
 
 def plot_the_fit(data, dataset: data_factory.FittingDataset):
     params = parameters.PennStateARILab550()
-    f_gt = [
-        -params.m * parameters.Environment.g * np.array([0.0, 0.0, 1.0]) + params.m * dataset.dv[i]
+    f_total_intertial_frame_gt = [
+        (-params.m * parameters.Environment.g * np.array([0.0, 0.0, 1.0]) + params.m * dataset.dv[i])
         for i in range(len(dataset.dv))
     ]
+    f_0_body_frame_gt = [
+        dataset.shared_r_disk[i].T@dataset.rotor_0_f_rotor_inertial_frame[i]    # back to body frame/disk frame
+        for i in range(len(dataset.rotor_0_f_rotor_inertial_frame))
+        ]
+    f_1_body_frame_gt = [
+        dataset.shared_r_disk[i].T@dataset.rotor_1_f_rotor_inertial_frame[i]    # back to body frame/disk frame
+        for i in range(len(dataset.rotor_1_f_rotor_inertial_frame))
+        ]
+    f_2_body_frame_gt = [
+        dataset.shared_r_disk[i].T@dataset.rotor_2_f_rotor_inertial_frame[i]    # back to body frame/disk frame
+        for i in range(len(dataset.rotor_2_f_rotor_inertial_frame))
+        ]
+    f_3_body_frame_gt = [
+        dataset.shared_r_disk[i].T@dataset.rotor_3_f_rotor_inertial_frame[i]    # back to body frame/disk frame
+        for i in range(len(dataset.rotor_3_f_rotor_inertial_frame))
+        ]
+    f_total_from_rotor_inertial_frame_gt = [
+        utils.FrdFluConverter.flip_vector(dataset.rotor_0_f_rotor_inertial_frame[i] + dataset.rotor_1_f_rotor_inertial_frame[i] + \
+        dataset.rotor_2_f_rotor_inertial_frame[i] + dataset.rotor_3_f_rotor_inertial_frame[i])
+        for i in range(len(dataset.rotor_0_f_rotor_inertial_frame))
+        ]
+    
+    fig0, axs0 = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
 
-    fig, axs = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+    force_labels = ["Force X", "Force Y", "Force Z"]
+    for i in range(3):
+        axs0[i].plot(data["i"], [f[i] for f in data["f_inertial_frame_frd"]], label=f'Fitted F{["x","y","z"][i]}', linestyle='None', marker='.')
+        axs0[i].plot([f[i] for f in f_total_intertial_frame_gt], label=f'GT F{["x","y","z"][i]}', linestyle='-', marker='.')
+        axs0[i].plot([f[i] for f in f_total_from_rotor_inertial_frame_gt], label=f'GT from Rotor F{["x","y","z"][i]}', linestyle='-', marker='.')
+        axs0[i].legend()
+        axs0[i].set_ylabel(force_labels[i])
+    axs0[2].set_xlabel("Sample Index")
 
-    axs[0].plot(data["i"], [f[0] for f in data["f_total"]], label='Fitted Fx', linestyle='None', marker='.')
-    axs[0].plot([f[0] for f in f_gt], label='GT Fx', linestyle='-', marker='.')
-    axs[0].legend()
-    axs[0].set_ylabel("Force X")
+    fig0.tight_layout()
 
-    axs[1].plot(data["i"], [f[1] for f in data["f_total"]], label='Fitted Fy', linestyle='None', marker='.')
-    axs[1].plot([f[1] for f in f_gt], label='GT Fy', linestyle='-', marker='.')
-    axs[1].legend()
-    axs[1].set_ylabel("Force Y")
+    fig1, axs1 = plt.subplots(4, 3, figsize=(12, 8), sharex=True)
 
-    axs[2].plot(data["i"], [f[2] for f in data["f_total"]], label='Fitted Fz', linestyle='None', marker='.')
-    axs[2].plot([f[2] for f in f_gt], label='GT Fz', linestyle='-', marker='.')
-    axs[2].legend()
-    axs[2].set_ylabel("Force Z")
-    axs[2].set_xlabel("Sample Index")
+    for i in range(3):
+        axs1[0, i].plot(data["i"], [f[i] for f in data["f_0"]], label='Fitted F0', linestyle='None', marker='.')
+        axs1[0, i].plot([f[i] for f in f_0_body_frame_gt], label='GT F0', linestyle='-')
+        axs1[1, i].plot(data["i"], [f[i] for f in data["f_1"]], label='Fitted F1', linestyle='None', marker='.')
+        axs1[1, i].plot([f[i] for f in f_1_body_frame_gt], label='GT F1', linestyle='-')
+        axs1[2, i].plot(data["i"], [f[i] for f in data["f_2"]], label='Fitted F2', linestyle='None', marker='.')
+        axs1[2, i].plot([f[i] for f in f_2_body_frame_gt], label='GT F2', linestyle='-')
+        axs1[3, i].plot(data["i"], [f[i] for f in data["f_3"]], label='Fitted F3', linestyle='None', marker='.')
+        axs1[3, i].plot([f[i] for f in f_3_body_frame_gt], label='GT F3', linestyle='-')
+        axs1[0, i].set_ylabel(f"F0 {['X', 'Y', 'Z'][i]}")
+        axs1[1, i].set_ylabel(f"F1 {['X', 'Y', 'Z'][i]}")
+        axs1[2, i].set_ylabel(f"F2 {['X', 'Y', 'Z'][i]}")
+        axs1[3, i].set_ylabel(f"F3 {['X', 'Y', 'Z'][i]}")
 
-    fig.tight_layout()
-    return fig
+    return fig0, fig1

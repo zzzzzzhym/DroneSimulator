@@ -221,9 +221,12 @@ class BladeElementTheory:
     def guess_initial_v_i(self, y: float, omega_blade: float, is_ccw_blade=True):
         """Make initial guess based on static thrust model."""
         rpm_to_rad_per_sec = 2*np.pi/60
-
+        if is_ccw_blade:
+            omega_blade_in_rpm = omega_blade/rpm_to_rad_per_sec
+        else:
+            omega_blade_in_rpm = -omega_blade/rpm_to_rad_per_sec
         thrust_lbf = np.interp(
-            omega_blade/rpm_to_rad_per_sec,
+            omega_blade_in_rpm,
             APC_8x6_OfficialData.OMEGA_APC8X6_OFFICIAL_DATA_RPM,
             APC_8x6_OfficialData.THRUST_APC8X6_OFFICIAL_DATA_LBF
         )
@@ -262,7 +265,7 @@ class BladeElementTheory:
             u_free (np.ndarray): Free stream velocity in the inertial frame.
             v_forward (np.ndarray): Disk velocity in the inertial frame.
             r_disk (np.ndarray): Disk rotation matrix.
-            omega_blade (float): Rotation speed of the blade in rad/s.
+            omega_blade (float): Rotation speed of the blade in rad/s. In nominal conditions, ccw blade is positive, and cw blade is negative.
             is_ccw_blade (bool, optional): Indicates if the blade is counter-clockwise. Defaults to True.
 
         Returns:
