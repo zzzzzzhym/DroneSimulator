@@ -1,9 +1,13 @@
+from dataclasses import field
+from email import header
 import numpy as np
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import yaml
 import pickle
+import pandas as pd
+from ast import literal_eval
 
 import torch
 from torch.utils.data import DataLoader, Dataset
@@ -52,38 +56,59 @@ class LearningDataset(Dataset):
 
 class FittingDataset:
     """Dataset for fitting the model parameters"""
-    def __init__(self, pickled_data: dict) -> None:
-        self.u_free_0 = pickled_data["rotor_0_local_wind_velocity"]
-        self.v_forward_0 = pickled_data["rotor_0_velocity"]
-        self.omega_0 = pickled_data["rotor_0_rotation_spd"]
+    def __init__(self, df: pd.DataFrame, path_to_data_file: str) -> None:
+        self.path_to_data_file = path_to_data_file
 
-        self.u_free_1 = pickled_data["rotor_1_local_wind_velocity"]
-        self.v_forward_1 = pickled_data["rotor_1_velocity"]
-        self.omega_1 = pickled_data["rotor_1_rotation_spd"]
+        self.u_free_0 = np.array(df["rotor_0_local_wind_velocity"].to_list())
+        self.v_forward_0 = np.array(df["rotor_0_velocity"].to_list())
+        self.omega_0 = np.array(df["rotor_0_rotation_spd"].to_list())
 
-        self.u_free_2 = pickled_data["rotor_2_local_wind_velocity"]
-        self.v_forward_2 = pickled_data["rotor_2_velocity"]
-        self.omega_2 = pickled_data["rotor_2_rotation_spd"]
+        self.u_free_1 = np.array(df["rotor_1_local_wind_velocity"].to_list())
+        self.v_forward_1 = np.array(df["rotor_1_velocity"].to_list())
+        self.omega_1 = np.array(df["rotor_1_rotation_spd"].to_list())
 
-        self.u_free_3 = pickled_data["rotor_3_local_wind_velocity"]
-        self.v_forward_3 = pickled_data["rotor_3_velocity"]
-        self.omega_3 = pickled_data["rotor_3_rotation_spd"]
+        self.u_free_2 = np.array(df["rotor_2_local_wind_velocity"].to_list())
+        self.v_forward_2 = np.array(df["rotor_2_velocity"].to_list())
+        self.omega_2 = np.array(df["rotor_2_rotation_spd"].to_list())
 
-        self.shared_r_disk = pickled_data["shared_r_disk"]
+        self.u_free_3 = np.array(df["rotor_3_local_wind_velocity"].to_list())
+        self.v_forward_3 = np.array(df["rotor_3_velocity"].to_list())
+        self.omega_3 = np.array(df["rotor_3_rotation_spd"].to_list())
+        
+        self.shared_r_disk = np.array(df["shared_r_disk"].to_list())
 
-        self.rotor_0_f_rotor_inertial_frame = pickled_data["rotor_0_f_rotor_inertial_frame"]
-        self.rotor_1_f_rotor_inertial_frame = pickled_data["rotor_1_f_rotor_inertial_frame"]
-        self.rotor_2_f_rotor_inertial_frame = pickled_data["rotor_2_f_rotor_inertial_frame"]
-        self.rotor_3_f_rotor_inertial_frame = pickled_data["rotor_3_f_rotor_inertial_frame"]
+        self.rotor_0_f_rotor_inertial_frame = np.array(df["rotor_0_f_rotor_inertial_frame"].to_list())
+        self.rotor_1_f_rotor_inertial_frame = np.array(df["rotor_1_f_rotor_inertial_frame"].to_list())
+        self.rotor_2_f_rotor_inertial_frame = np.array(df["rotor_2_f_rotor_inertial_frame"].to_list())
+        self.rotor_3_f_rotor_inertial_frame = np.array(df["rotor_3_f_rotor_inertial_frame"].to_list())
 
-        self.f_x = pickled_data["f_disturb"]
-        self.f_y = pickled_data["torque_disturb"]
-        self.dv = pickled_data["dv"]
-        self.omega = pickled_data["omega"]
-        self.omega_dot = pickled_data["omega_dot"]
+        self.f_disturb = np.array(df["f_disturb"].to_list())
+        self.torque_disturb = np.array(df["torque_disturb"].to_list())
+        self.dv = np.array(df["dv"].to_list())
+        self.omega = np.array(df["omega"].to_list())
+        self.omega_dot = np.array(df["omega_dot"].to_list())
+
+        self.f_residual = None
+
+    def attach_residual_force(self, f_residual):
+        if (len(f_residual) == len(self.omega)):
+            print("f_residual mismatch the length with the other data")
+        else:
+            self.f_residual = f_residual
+
+    def is_ready_for_second_training(self):
+        is_ready = False
+        if self.f_residual is None:
+            print("f_residual is not attached")
+        else:
+            is_ready = True
+        return is_ready
+
+    def __len__(self):
+        return len(self.u_free_0)
 
 
-class FittingFactory:
+class DataFactoryParent:
     def __init__(self) -> None:
         pass
 
@@ -94,61 +119,12 @@ class FittingFactory:
         upper_dir = os.path.dirname(current_dir)
         file_path = os.path.join(upper_dir, "data", "training", file_name)
         return file_path  
-
-    @staticmethod
-    def load_sim_data(file_name: str) -> np.ndarray:
-        file_path = FittingFactory.get_path_to_data_file(file_name)
-        if os.path.exists(file_path):
-            # Load the data from the pkl file
-            with open(file_path, 'rb') as file:
-                sim_data = pickle.load(file)
-            return sim_data
-        else:
-            raise ValueError("No such file: " + file_path)
-        
-    def prepare_datasets(self, data_menu: list) -> FittingDataset:
-        """Prepare the datasets from the data menu
-        Each file in the data menu is a different condition, the length of the dataset is the number of conditions"""
-        datasets = []
-        for file in data_menu:
-            data = FittingFactory.load_sim_data(file)
-            dataset = FittingDataset(data)
-            datasets.append(dataset)
-        return datasets
-    
-class DataFactory:
-    """Data manager is responsible for:
-    1. defining the list of data to be used to train
-    2. check which columns are input and which are labels
-    3. generate LearningDataset and then LoaderSets for trainer
-    4. normalize the data"""
-    def __init__(self, data_menu: list, input_label_map_file: str, column_map_file: str, can_skip_io_normalizaiton: bool) -> None:
-        self.data_menu = data_menu
-        self.input_label_map = DataFactory.get_map(input_label_map_file)
-        self.column_map = DataFactory.get_map(column_map_file)
-        self.input_columns, self.label_columns = DataFactory.find_input_label_column(self.input_label_map, self.column_map)
-        self.config = DataFactory.load_config("data_factory_config.yaml")
-        self.input_normalization: dict[int, normalization.Normalization] = {}
-        self.label_normalization: dict[int, normalization.Normalization] = {}
-        self.input_mean_vector, self.input_scale_vector, self.label_mean_vector, self.label_scale_vector = self.make_normalization_params(column_map_file, can_skip=can_skip_io_normalizaiton)
-
-    @staticmethod
-    def find_input_label_column(input_label_map: dict, column_map: dict):
-        """use the config files to find the input and label columns"""
-        input_columns = []
-        for field in input_label_map["input"]:
-            input_columns.append(column_map[field])
-        label_columns = []
-        for field in input_label_map["label"]:
-            label_columns.append(column_map[field])    
-        return input_columns, label_columns
     
     @staticmethod
-    def get_map(map_file: str) -> dict:
-        map_file_path = DataFactory.get_path_to_data_file(map_file)
-        with open(map_file_path, 'r') as file:
-            map = yaml.safe_load(file)
-        return map
+    def process_raw_data_frame(df):
+        for header in df.columns:
+            if isinstance(df[header][0], str):
+                df[header] = df[header].apply(literal_eval)
 
     @staticmethod
     def get_path_to_data_file(file_name: str) -> str:
@@ -159,6 +135,65 @@ class DataFactory:
         return file_path
 
     @staticmethod
+    def make_data_frame_from_csv(file: str, selected_columns: list[str]=None) -> pd.DataFrame:
+        file_path = DataFactoryParent.get_path_to_data_file(file)
+        if selected_columns is None:
+            data = pd.read_csv(file_path)
+        else:
+            data = pd.read_csv(file_path, usecols=selected_columns)
+        DataFactoryParent.process_raw_data_frame(data)
+        return data
+
+class FittingFactory(DataFactoryParent):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def prepare_datasets(self, data_menu: list) -> FittingDataset:
+        """Prepare the datasets from the data menu
+        Each file in the data menu is a different condition, the length of the dataset is the number of conditions"""
+        datasets = []
+        for file in data_menu:
+            file_path = DataFactoryParent.get_path_to_data_file(file)
+            # data = pd.read_csv(file_path)
+            data = DataFactoryParent.make_data_frame_from_csv(file)
+            dataset = FittingDataset(data, file_path)
+            datasets.append(dataset)
+        return datasets
+    
+class DataFactory(DataFactoryParent):
+    """Data manager is responsible for:
+    1. defining the list of data to be used to train
+    2. check which columns are input and which are labels
+    3. generate LearningDataset and then LoaderSets for trainer
+    4. normalize the data"""
+    def __init__(self, input_label_map_file: str) -> None:
+        self.num_of_conditions = 0
+        self.input_label_map = DataFactory.get_map(input_label_map_file)
+        self.input_headers = DataFactory.extract_header_from_input_label_map(self.input_label_map["input"])
+        self.label_headers = DataFactory.extract_header_from_input_label_map(self.input_label_map["label"])
+        self.input_normalization, self.label_normalization = self.initialize_normalization_dict()
+        self.normalization_params_file_path = DataFactory.find_path_to_normalization_params_file(input_label_map_file)
+        self.config = DataFactory.load_config("data_factory_config.yaml")
+
+    @staticmethod
+    def find_input_label_column(input_label_map: dict):
+        """use the config files to find the input and label columns"""
+        input_columns = []
+        for key, value in input_label_map["input"].items():
+            input_columns.append(key)
+        label_columns = []
+        for key, value in input_label_map["label"].items():
+            label_columns.append(key)
+        return input_columns, label_columns
+    
+    @staticmethod
+    def get_map(map_file: str) -> dict:
+        map_file_path = DataFactoryParent.get_path_to_data_file(map_file)
+        with open(map_file_path, 'r') as file:
+            map = yaml.safe_load(file)
+        return map
+
+    @staticmethod
     def load_config(config_file: str):
         """Load configuration from YAML file"""
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -166,22 +201,60 @@ class DataFactory:
         with open(config_path, 'r') as file:
             config = yaml.safe_load(file)
         return config    
+    
+    def initialize_normalization_dict(self):
+        """When normalization applies to each dataset, this template can be copied as a starting point."""
+        input_normalization: dict[str, normalization.Normalization] = {}
+        label_normalization: dict[str, normalization.Normalization] = {}
+        for field, dimensions in self.input_label_map["input"].items():
+            if dimensions is None:
+                input_normalization[field] = normalization.Normalization()
+            else:
+                for dim in dimensions:
+                    input_normalization[f"{field}_{dim}"] = normalization.Normalization()
+        for field, dimensions in self.input_label_map["label"].items():
+            if dimensions is None:
+                label_normalization[field] = normalization.Normalization()
+            else:
+                for dim in dimensions:
+                    label_normalization[f"{field}_{dim}"] = normalization.Normalization()
+        return input_normalization, label_normalization
 
     @staticmethod
-    def load_sim_data(file_name: str) -> np.ndarray:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(os.path.dirname(current_dir), "data", "training", file_name)
-        if os.path.exists(file_path):
-            # Load the data from the CSV file, skipping the first row (header)
-            sim_data = np.genfromtxt(file_path, delimiter=',', skip_header=1)
-            return sim_data
-        else:
-            raise ValueError("No such file: " + file_path)
+    def extract_header_from_input_label_map(column_names: dict[list]) -> list[str]:
+        headers = []
+        for column, dimensions in column_names.items():
+            if dimensions is None:
+                headers.append(column)
+            else:
+                headers.extend([f"{column}_{i}" for i in dimensions])
+        return headers
 
-    def convert_sim_to_training_data(self, sim_data: np.ndarray, condition_id: int, file: str) -> LearningDataset:
+    @staticmethod
+    def extract_data_from_data_frame(column_names: dict[list], df: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
+        """Extract data from the DataFrame based on the specified column names."""
+        data = []
+        for column, dimensions in column_names.items():
+            col_data = np.array(df[column].to_list())
+            if dimensions is None:
+                data.append(col_data)
+            else:
+                data.append(col_data[:, dimensions])
+        data = np.column_stack(data)
+        return data
+
+    def load_sim_data(self, file_name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Load the csv file and find the columns of interest."""
+        input_columns, label_columns = DataFactory.find_input_label_column(self.input_label_map)
+        df = DataFactoryParent.make_data_frame_from_csv(file_name, input_columns + label_columns)
+        input_data = DataFactory.extract_data_from_data_frame(self.input_label_map["input"], df)
+        label_data = DataFactory.extract_data_from_data_frame(self.input_label_map["label"], df)
+        return input_data, label_data
+
+    def convert_sim_to_training_data(self, input_data: np.ndarray, label_data: np.ndarray, condition_id: int, file: str) -> LearningDataset:
         # normalize data before putting it into the dataset
-        result = LearningDataset(sim_data[:, self.input_columns],   # input normalization will be done in the network
-                                 (sim_data[:, self.label_columns] - self.label_mean_vector)*self.label_scale_vector,
+        result = LearningDataset(input_data,   # input normalization will be done in the network
+                                 (label_data - self.label_mean_vector)*self.label_scale_vector,
                                  condition_id,
                                  self.input_mean_vector,
                                  self.input_scale_vector,
@@ -196,10 +269,11 @@ class DataFactory:
         datasets = []
         condition_id = 0    # ID value doesn't matter, but each different condition should have different ID
         for file in data_menu:
-            data = DataFactory.load_sim_data(file)
+            input_data, label_data = self.load_sim_data(file)
             if can_inspect_data:
-                self.inspect_data(data, file)  # inspect the data 
-            dataset = self.convert_sim_to_training_data(data, condition_id, file)
+                DataFactory.plot_dataset_distribution_grid(input_data, self.input_headers, file + " input")  # inspect the data
+                DataFactory.plot_dataset_distribution_grid(label_data, self.label_headers, file + " label")  # inspect the data
+            dataset = self.convert_sim_to_training_data(input_data, label_data, condition_id, file)
             condition_id += 1
             datasets.append(dataset)
         return datasets
@@ -249,27 +323,22 @@ class DataFactory:
             a_set.append(a_loader)
         return phi_set, a_set
 
-    def get_data(self, can_inspect_data: bool=False) -> tuple[list[DataLoader], list[DataLoader]]:
+    def get_data(self, data_menu: list, can_inspect_data: bool=False) -> tuple[list[DataLoader], list[DataLoader]]:
         """Main API of DataFactory"""
-        datasets = self.prepare_datasets(self.data_menu, can_inspect_data)
+        datasets = self.prepare_datasets(data_menu, can_inspect_data)
         phi_set, a_set = self.prepare_loadersets(datasets)
         return phi_set, a_set
     
-    def normalize_data(self):
+    def normalize_data(self, data_menu: list) -> None:
         """Normalize the data using the mean and standard deviation"""
-        # initialization
-        for column in self.input_columns:
-            self.input_normalization[column] = normalization.Normalization()
-        for column in self.label_columns:
-            self.label_normalization[column] = normalization.Normalization()
         # traverse the datasets
         for file in self.data_menu:
-            dataset = DataFactory.load_sim_data(file)
+            input_data, label_data = DataFactory.load_sim_data(file)
             for column in self.input_columns:
-                self.input_normalization[column].add_batch(dataset[:, column])
+                self.input_normalization[column].add_batch(input_data)
             for column in self.label_columns:
-                self.label_normalization[column].add_batch(dataset[:, column])
-    
+                self.label_normalization[column].add_batch(label_data)
+
     def generate_normalization_params_file(self, output_path: str) -> None:
         """Generate the normalization parameters for input and output"""
         content = {"input": {}, "output": {}}
@@ -281,51 +350,92 @@ class DataFactory:
             content["output"][column] = {"mean": mean, "scale": scale}
         with open(output_path, 'w') as file:
             yaml.dump(content, file)
-        
-    def make_normalization_params(self, column_map_file: str, can_skip: bool) -> None:
+
+    def set_num_of_conditions(self, data_menu: list) -> None:
+        self.num_of_conditions = len(data_menu)
+
+    @staticmethod
+    def find_path_to_normalization_params_file(input_label_map_file: str) -> str:
+        input_label_map_file_path = DataFactoryParent.get_path_to_data_file(input_label_map_file)
+        input_label_map_dir = os.path.dirname(input_label_map_file_path)
+        normalization_params_file_path = os.path.join(input_label_map_dir, "normalization_params.yaml")
+        return normalization_params_file_path
+
+    def make_normalization_params(self, data_menu: list) -> None:
         # if the normalization params file is not generated, generate it
-        column_map_file_path = DataFactory.get_path_to_data_file(column_map_file)
-        column_map_dir = os.path.dirname(column_map_file_path)
-        normalization_params_file_path = os.path.join(column_map_dir, "normalization_params.yaml")
-        if not os.path.exists(normalization_params_file_path):
-            print("Normalization params file not found, generating it and saving it to\n" + os.path.relpath(normalization_params_file_path))
-            self.normalize_data()
-            self.generate_normalization_params_file(normalization_params_file_path)
+        if not os.path.exists(self.normalization_params_file_path):
+            print("Normalization params file not found, generating it and saving it to\n" + os.path.relpath(self.normalization_params_file_path))
+            self.normalize_data(data_menu)
+            self.generate_normalization_params_file(self.normalization_params_file_path)
             print("Normalization params file generated")
         # load the normalization params file
-        print("Loading normalization params file from\n" + os.path.relpath(normalization_params_file_path))
-        with open(normalization_params_file_path, 'r') as file:
+        print("Loading normalization params file from\n" + os.path.relpath(self.normalization_params_file_path))
+        with open(self.normalization_params_file_path, 'r') as file:
             normalization_params = yaml.safe_load(file)
+
         # make normalization matrix
         mean = []
         scale = []
-        for columns in normalization_params["input"].keys():
-            if columns in self.input_columns:
-                mean.append(normalization_params["input"][columns]["mean"])
-                scale.append(normalization_params["input"][columns]["scale"])
-        input_mean_vector = np.array(mean)
-        input_scale_vector = np.array(scale)
+        if normalization_params["input"] is None: 
+            input_mean_vector = np.zeros(len(self.input_headers))
+            input_scale_vector = np.ones(len(self.input_headers))
+        for field in self.input_label_map["input"]:
+            if field in normalization_params["input"].keys():
+                if self.input_label_map["input"][field] is None:
+                    mean.append(normalization_params["input"][field]["mean"])
+                    scale.append(normalization_params["input"][field]["scale"])
+                else:
+                    for dim in self.input_label_map["input"][field]:
+                        mean.append(normalization_params["input"][field][dim]["mean"])
+                        scale.append(normalization_params["input"][field][dim]["scale"])
+            else:
+                if self.input_label_map["input"][field] is None:
+                    mean.append(0.0)
+                    scale.append(1.0)
+                else:
+                    for dim in self.input_label_map["input"][field]:
+                        mean.append(0.0)
+                        scale.append(1.0)
+            input_mean_vector = np.array(mean)
+            input_scale_vector = np.array(scale)
         mean = []
         scale = []
-        for columns in normalization_params["output"].keys():
-            if columns in self.label_columns:
-                mean.append(normalization_params["output"][columns]["mean"])
-                scale.append(normalization_params["output"][columns]["scale"])
-        label_mean_vector = np.array(mean)
-        label_scale_vector = np.array(scale)
-        if can_skip:
-            input_mean_vector = np.zeros(input_mean_vector.shape)
-            input_scale_vector = np.ones(input_scale_vector.shape)
-            label_mean_vector = np.zeros(label_mean_vector.shape)
-            label_scale_vector = np.ones(label_scale_vector.shape)
-        return input_mean_vector, input_scale_vector, label_mean_vector, label_scale_vector
+        if normalization_params["label"] is None: 
+            label_mean_vector = np.zeros(len(self.label_headers))
+            label_scale_vector = np.ones(len(self.label_headers))
+        else:
+            for field in self.input_label_map["label"]:
+                if field in normalization_params["label"].keys():
+                    if self.input_label_map["label"][field] is None:
+                        mean.append(normalization_params["label"][field]["mean"])
+                        scale.append(normalization_params["label"][field]["scale"])
+                    else:
+                        for dim in self.input_label_map["label"][field]:
+                            mean.append(normalization_params["label"][field][dim]["mean"])
+                            scale.append(normalization_params["label"][field][dim]["scale"])
+                else:
+                    if self.input_label_map["label"][field] is None:
+                        mean.append(0.0)
+                        scale.append(1.0)
+                    else:
+                        for dim in self.input_label_map["label"][field]:
+                            mean.append(0.0)
+                            scale.append(1.0)
+            label_mean_vector = np.array(mean)
+            label_scale_vector = np.array(scale)
+        self.input_mean_vector = input_mean_vector
+        self.input_scale_vector = input_scale_vector
+        self.label_mean_vector = label_mean_vector
+        self.label_scale_vector = label_scale_vector
 
-    def inspect_data(self, sim_data, file: str) -> None:
-        merged_columns = self.input_columns + self.label_columns
-        merged_titles = self.input_label_map["input"] + self.input_label_map["label"]
-        data = sim_data[:, merged_columns]
-        DataFactory.plot_dataset_distribution_grid(data, merged_titles, file)
-            
+    def inspect_data(self, input_frames: pd.DataFrame, output_frames: pd.DataFrame, file: str) -> None:
+        """Plot input and output data distributions."""
+        input_data, input_titles = DataFactory.get_norms_of_fields(input_frames)
+        output_data, output_titles = DataFactory.get_norms_of_fields(output_frames)
+        data = input_data + output_data
+        titles = input_titles + output_titles
+        DataFactory.plot_dataset_distribution_grid(data, titles, file)
+
     @staticmethod
     def plot_dataset_distribution_grid(data: np.ndarray, sub_titles: list[str], title: str, bins=50, figsize=(20, 10), cols=7):
         num_features = data.shape[1]

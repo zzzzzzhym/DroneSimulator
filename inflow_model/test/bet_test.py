@@ -188,5 +188,18 @@ class TestBet(unittest.TestCase):
         should_be_almost_0 = self.bet_instance.get_thrust_difference(np.array([v_i]), y, u_free, v_forward, r_disk, omega_blade, is_ccw_blade)
         self.assertAlmostEqual(should_be_almost_0, 0.0) 
 
+    def test(self):
+        # test ccw and cw symmetry of the entire rotor force
+        u_free = np.array([0.0, 0, 0])
+        v_forward = np.array([1.3, 0, 0])
+        r_disk = self.bet_instance.pitch_rotor_disk_along_y_axis(np.radians(30))
+        omega = 1000
+
+        f_ccw = self.bet_instance.get_rotor_forces(u_free, v_forward, r_disk, omega, True)
+        f_cw = self.bet_instance.get_rotor_forces(u_free, v_forward, r_disk, -omega, False)
+        self.assertAlmostEqual(f_ccw[0], f_cw[0])
+        self.assertAlmostEqual(f_ccw[1], -f_cw[1])
+        self.assertAlmostEqual(f_ccw[2], f_cw[2])
+
 if __name__ == '__main__':
     unittest.main()

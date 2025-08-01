@@ -146,3 +146,39 @@ class ModelFactory:
             "label_scale": self.label_scale,
             "customized_config": self.config
         }
+
+
+def save_model(name, phi_net: PhiNet, h_net: HNet, model_factory_config: dict, input_label_map: dict) -> None:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(current_dir, "model", name + ".pth")
+        torch.save({"phi": phi_net.state_dict(),
+                    "h": h_net.state_dict(),
+                    "model_factory_init_args": model_factory_config, 
+                    "phi_net_io_fields": input_label_map}, 
+                    file_path)
+        print(f"Model saved to {os.path.relpath(file_path, os.getcwd())}")
+
+def load_model(name) -> tuple[PhiNet, HNet, dict]:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, "model", name + ".pth")       
+    package = torch.load(file_path)
+
+    # recreate the model factory instance that generated the trained model
+    model_factory_instance = ModelFactory(
+        package["model_factory_init_args"]["num_of_conditions"],
+        package["model_factory_init_args"]["dim_of_input"],
+        package["model_factory_init_args"]["input_mean"],
+        package["model_factory_init_args"]["input_scale"],
+        package["model_factory_init_args"]["label_mean"],
+        package["model_factory_init_args"]["label_scale"],
+        customized_config=package["model_factory_init_args"]["customized_config"]
+    )
+    phi, h = model_factory_instance.generate_nets()
+    phi.load_state_dict(package["phi"])
+    phi.eval()  # set to eval mode
+    h.load_state_dict(package["h"])
+    h.eval()
+    print("phi net input output fields:")
+    for key, value in package["phi_net_io_fields"].items():
+        print(key, value)
+    return phi, h

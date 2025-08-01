@@ -1,6 +1,7 @@
 import os
 import yaml
 import numpy as np
+import pandas as pd
 import pickle
 
 
@@ -31,29 +32,21 @@ class Logger:
         """Assume buffer and the final result dict has the same keys"""
         for key in self.buffer:
             self.output[key] = np.array(self.buffer[key])
-            # for scalar values, reshape to 2D to prevent hstack error in construct_csv_array
-            if self.output[key].ndim == 1:  
-                self.output[key] = self.output[key].reshape(-1, 1)
 
-    def get_items_to_csv(self):
+    def get_names_of_items_to_csv(self):
         items = []
-        headers = []
         for key, val in self.config.items():
             if "can_save_to_file" in val:
                 if val["can_save_to_file"]:
                     items.append(key)
-                    if len(val["components"]) == 0:
-                        headers.append(key)
-                    else:
-                        for suffix in val["components"]:
-                            headers.append(key + "_" + suffix)
-        return items, headers
+        return items
 
-    def construct_csv_array(self) -> tuple[str, np.ndarray]:
-        items, headers = self.get_items_to_csv()
-        first_line = ", ".join(headers)
-        data = np.hstack([self.output[key] for key in items])
-        return first_line, data
+    def make_data_frame(self) -> pd.DataFrame:
+        df = pd.DataFrame()
+        items = self.get_names_of_items_to_csv()
+        for key in items:
+            df[key] = self.output[key].tolist()
+        return df
 
     def log_sim_result(self, file_name: str, type: str) -> None:
         if type == 'csv':
@@ -65,8 +58,8 @@ class Logger:
         file_path = os.path.join(upper_dir, "data", "training", file_name + suffix)
         if not os.path.exists(file_path):
             if type == 'csv':
-                first_line, array = self.construct_csv_array()
-                np.savetxt(file_path, array, delimiter=',', fmt='%.17f', header=first_line, comments='')
+                df = self.make_data_frame()
+                df.to_csv(file_path, index=False, float_format='%.17f')
             elif type == 'pkl':
                 with open(file_path, "wb") as f:
                     pickle.dump(self.buffer, f)
@@ -77,7 +70,7 @@ class Logger:
     def generate_column_map(self) -> dict:
         """Generate a dictionary that maps the keys in the buffer to their corresponding components.
         This is used to generate the header for the CSV file."""
-        _, headers = self.get_items_to_csv()
+        headers = self.get_names_of_items_to_csv()
         header_map = {header: idx for idx, header in enumerate(headers)}
         current_dir = os.path.dirname(os.path.abspath(__file__))
         map_file_path = os.path.join(current_dir, "column_map.yaml")
