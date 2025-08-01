@@ -15,11 +15,23 @@ class BladeElementTheory:
     """    
     def __init__(self, blade: Blade, num_of_elements=100, num_of_rotation_segments=90):
         self.blade = blade
+        self.coeff = aero_coeff.Coeffecients(cl_1=self.blade.cl_1, cl_2=self.blade.cl_2, alpha_0=self.blade.alpha_0, cd=self.blade.cd, cd_0=self.blade.cd_0)
+        self.disk_area = np.pi*(self.blade.y_max**2 - self.blade.y_min**2)  # rotor disk area
+        self.num_of_elements = None
+        self.num_of_rotation_segments = None
+        self.dy = None
+        self.set_integration_resolution(num_of_elements, num_of_rotation_segments)
+
+    def set_integration_resolution(self, num_of_elements: int, num_of_rotation_segments: int):
+        """Set the resolution of the integration for the blade element theory.
+        
+        Args:
+            num_of_elements (int): Number of elements along the blade length.
+            num_of_rotation_segments (int): Number of segments for one revolution of the blade.
+        """
         self.num_of_elements = num_of_elements
         self.num_of_rotation_segments = num_of_rotation_segments
-        self.coeff = aero_coeff.Coeffecients(cl_1=self.blade.cl_1, cl_2=self.blade.cl_2, alpha_0=self.blade.alpha_0, cd=self.blade.cd, cd_0=self.blade.cd_0)
         self.dy = self.blade.y_max/self.num_of_elements
-        self.disk_area = np.pi*(self.blade.y_max**2 - self.blade.y_min**2)  # rotor disk area
 
     def get_v_flow_disk_frame(self, u_free: np.ndarray, v_i: float, v_forward: np.ndarray, r_disk: np.ndarray):
         """get the relative wind speed in the disk frame. It accounts for the forward speed of the disk.
