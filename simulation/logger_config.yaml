@@ -1,406 +1,145 @@
 # defines the data to be logged in the simulation
 # can_save_to_file: true means that the data will be saved as training data
-# is_label: true means that the data will be used as labels for training otherwiase it will be used as features
+
 position:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 q:
-  components:
-    - "0"
-    - "1"
-    - "2"
-    - "3"
   can_save_to_file: true
-  is_label: false
 v:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 dv:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 e_x:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 e_v:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 e_a:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 e_j:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 e_r:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 e_omega:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 psi_r_rd:
-  components: [] # not for logging
+  can_save_to_file: false
 f_ctrl_input:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 f_ctrl_input_dot:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 f_d:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 f_d_dot:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 f_d_dot2:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 torque_ctrl_input:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false    
 x_d:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 v_d:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 x_d_dot2:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 x_d_dot3:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 f_motor:
-  components:
-    - "0"
-    - "1"
-    - "2"
-    - "3"
+  can_save_to_file: false
 f_disturb:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true    
-  is_label: true
 f_disturb_est:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 f_disturb_est_base:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 torque_disturb:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true    
-  is_label: true
 torque_disturb_est:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 torque_disturb_est_base:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 omega:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true  
-  is_label: false  
 omega_dot:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: true      
 omega_desired:
-  components:
-    - x
-    - y
-    - z
+  can_save_to_file: false
 pose:
-  components: [] # not for logging
+  can_save_to_file: false
 pose_dot:
-  components: [] # not for logging
+  can_save_to_file: false
 pose_desired:
-  components: [] # not for logging
+  can_save_to_file: false
 pose_desired_dot:
-  components: [] # not for logging
+  can_save_to_file: false
 pose_desired_dot2:
-  components: [] # not for logging
+  can_save_to_file: false
 rotor_0_rotation_spd:
-  components: []
   can_save_to_file: true
-  is_label: false
 rotor_1_rotation_spd:
-  components: []
   can_save_to_file: true
-  is_label: false
 rotor_2_rotation_spd:
-  components: []
   can_save_to_file: true
-  is_label: false
 rotor_3_rotation_spd:
-  components: []
   can_save_to_file: true
-  is_label: false
 rotor_0_position:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_1_position:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_2_position:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_3_position:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_0_velocity:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_1_velocity:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_2_velocity:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_3_velocity:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 b_1d:
-  components: []
+  can_save_to_file: false
 f_feedback:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: false
-  is_label: false
 f_feedforward:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: false
-  is_label: false
 f_disturb_compensation:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: false
-  is_label: false
 torque_feedback:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: false
-  is_label: false
 torque_coriolis:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: false
-  is_label: false
 torque_feedforward:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: false
-  is_label: false
 f_disturb_sensed_raw:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: false
-  is_label: false
 rotor_0_rotation_spd_delayed:
-  components: []
   can_save_to_file: false
-  is_label: false
 rotor_1_rotation_spd_delayed:
-  components: []
   can_save_to_file: false
-  is_label: false
 rotor_2_rotation_spd_delayed:
-  components: []
   can_save_to_file: false
-  is_label: false
 rotor_3_rotation_spd_delayed:
-  components: []
   can_save_to_file: false
-  is_label: false
 f_propeller:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: false
-  is_label: false
 f_body:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: false
-  is_label: false
 rotor_0_local_wind_velocity:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_1_local_wind_velocity:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_2_local_wind_velocity:
-  components:
-    - x
-    - y
-    - z 
   can_save_to_file: true
-  is_label: false
 rotor_3_local_wind_velocity:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_0_f_rotor_inertial_frame:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_1_f_rotor_inertial_frame:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_2_f_rotor_inertial_frame:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 rotor_3_f_rotor_inertial_frame:
-  components:
-    - x
-    - y
-    - z
   can_save_to_file: true
-  is_label: false
 shared_r_disk:
-  components: 
-    - a11
-    - a12
-    - a13
-    - a21
-    - a22
-    - a23
-    - a31
-    - a32
-    - a33
   can_save_to_file: true

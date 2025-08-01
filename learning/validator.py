@@ -66,11 +66,21 @@ class Evaluator:
             self.phi_net.train()
         return mse
 
+    def get_zero_prediction_mse(self):
+        """MSE if model output is zero"""
+        mse = []
+        for dataset in self.datasets:
+            groundtruth = torch.tensor(dataset.output)
+            mse_per_dataset = self.get_mse_per_label(groundtruth)
+            mse.append(mse_per_dataset)
+        return mse
+
     def test_model(self):
         mse = self.evaluate_model(can_show_plot=True)
+        zero_prediction_mse = self.get_zero_prediction_mse()
         rms = np.sqrt(np.array(mse))  # convert mse to rms
         self.plot_rms_grouped_by_dimension(rms)
-        self.plot_mse_grouped_by_dimension(mse)
+        self.plot_mse_grouped_by_dimension(mse, zero_prediction_mse)
 
     def callback_validation(self):
         mse = self.evaluate_model(can_show_plot=False)
@@ -143,17 +153,30 @@ class Evaluator:
         plt.tight_layout()
         plt.show()
 
-    def plot_mse_grouped_by_dimension(self, mse_list):
+    def plot_mse_grouped_by_dimension(self, mse_list, zero_prediction_mse_list):
         mse_array = np.array(mse_list)  # shape: (num_conditions, num_dims)
+        zero_prediction_mse_array = np.array(zero_prediction_mse_list)
         num_conditions, num_dims = mse_array.shape
 
         x = np.arange(num_conditions)  # x axis positions per condition
         width = 0.8 / num_dims  # space out bars within a group
+        colors = plt.cm.tab10.colors  # 10 distinct colors (cycle if >10 dims)
 
         plt.figure(figsize=(12, 6))
         for dim in range(num_dims):
+            color = colors[dim % len(colors)]
             print(f"average mse for dim {dim}: {np.mean(mse_array[:, dim])}")
-            plt.bar(x + dim * width, mse_array[:, dim], width=width, label=f'Dim {dim}')
+            plt.bar(x + dim * width,
+                    mse_array[:, dim],
+                    width=width,
+                    label=f'Dim {dim}',
+                    color=color)
+            plt.scatter(x + dim * width,
+                        zero_prediction_mse_array[:, dim],
+                        label=f'Dim {dim} (Zero Prediction)',
+                        color=color,
+                        marker='o',
+                        edgecolors='black')  # optional outline for visibility
 
         # Labeling
         plt.xticks(

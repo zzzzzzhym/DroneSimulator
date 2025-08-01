@@ -1,0 +1,23 @@
+# in development
+PhiNet:
+  hidden_layer_dimensions:
+    - 16
+
+HNet:
+  hidden_layer_dimensions:
+    - 32
+  
+dim_of_feature: 2
+
+# from the paper
+# PhiNet:
+#   hidden_layer_dimensions:
+#     - 50
+#     - 60
+#     - 50
+
+# HNet:
+#   hidden_layer_dimensions:
+#     - 128
+  
+# dim_of_feature: 4

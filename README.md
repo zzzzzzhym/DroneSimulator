@@ -2,7 +2,7 @@
 This repo replicates Neural-Fly[1] project in a simulation environment. 
 
 ## Introduction
-![system diagram](images/system_diagram.drawio.svg)
+![system diagram](readme_assets/images/system_diagram.drawio.svg)
 
 The repo is consisted with the following modules:  
 - a drone dynamic simulation environment
@@ -25,9 +25,9 @@ python -m unittest discover -s . -p "*_test.py"
 
 ## Demo
 The simulation environment can produce the drone flight trace and its reference path.  
-![drone fly](images/drone_tracking_a_trajectory.png)  
+![drone fly](readme_assets/images/drone_tracking_a_trajectory.png)  
 The trajectory generator can produce a randomly sampled trajectory.  
-![](images/randomly_sampled_trajectory_10seeds.png)
+![](readme_assets/images/randomly_sampled_trajectory_10seeds.png)
 
 
 ## Reference  

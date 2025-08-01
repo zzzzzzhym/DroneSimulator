@@ -14,6 +14,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import random_split
 
 import model
+import performance_analyzer
 
 class Trainer:
     def __init__(self,
@@ -21,7 +22,9 @@ class Trainer:
                  h_net: model.MultilayerNet,
                  loaderset_phi: list[DataLoader],
                  loaderset_a: list[DataLoader],
-                 dim_of_label: int
+                 dim_of_label: int,
+                 validation_callback: callable,
+                 config_file: str = "trainer_config.yaml",
                  ) -> None:
         self.phi_net = phi_net
         self.h_net = h_net
@@ -31,11 +34,12 @@ class Trainer:
         self.num_of_conditions = self.h_net.dim_of_output   # should match the length of loaderset_phi and loaderset_a
         if self.num_of_conditions != len(loaderset_phi) or self.num_of_conditions != len(loaderset_a):
             raise ValueError("Number of conditions does not match the length of loaderset_phi and loaderset_a")
-        self.config = Trainer.load_config("trainer_config.yaml")
+        self.config = Trainer.load_config(config_file)
         self.criterion = None
         self.criterion_h = None
         self.optimizer_h = None
         self.optimizer_phi = None
+        self.validator_callback = validation_callback  
 
         # initialization
         self.set_optimizers()
@@ -69,7 +73,8 @@ class Trainer:
         return config
 
     def get_optimal_a(self, phi: torch.Tensor, ground_truth, is_greedy: bool=False) -> torch.Tensor:
-        """Get the optimal adapter matrix using greedy residual fitting.
+        """Get the optimal adapter matrix and decide whether to use greedy residual fitting.
+        When greedy residual fitting is used, the adapter matrix is computed column by column so that the earlier columns of adapter can take more responsibility to fit the ground truth.
         """
         if not is_greedy:
             a = self.get_least_square_of_a(phi, ground_truth)
@@ -218,7 +223,7 @@ class Trainer:
                 total_norm += param_norm.item() ** 2
         return total_norm ** 0.5
 
-    def train_model(self, validation_callback):
+    def train_model(self):
         self.loss_phi_trace = []
         self.loss_h_trace = []
         self.loss_phi_trace_on_validation = []
@@ -229,7 +234,7 @@ class Trainer:
             loss_phi, loss_h, a_trace = self.step_training(epoch)
             self.loss_phi_trace.append(loss_phi/self.num_of_conditions)
             self.loss_h_trace.append(loss_h/self.num_of_conditions)
-            self.loss_phi_trace_on_validation.append(validation_callback())
+            self.loss_phi_trace_on_validation.append(self.validator_callback())
             for case_num in range(len(a_trace)):
                 self.a_trace[case_num][epoch] = a_trace[case_num]
             if epoch % 100 == 0:
@@ -290,8 +295,13 @@ class Trainer:
         axs[2].set_ylabel('loss_phi_trace_on_validation [N]')
         axs[2].set_xlabel('epoch')
 
-
-        
+    def plot_tsne_of_a_trace(self):
+        print("Plotting t-SNE of a_trace...")
+        can_print_3d = False
+        n = 100
+        performance_analyzer.plot_tsne_of_a(self.a_trace, list(range(n, n + 10)))
+        if can_print_3d:
+            performance_analyzer.plot_tsne_3d_of_a(self.a_trace, list(range(n, n + 10)))
 
 
 
