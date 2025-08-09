@@ -78,7 +78,7 @@ class BemtParamFitter:
             num_of_rotation_segments = 6
         self.bet_instance.set_integration_resolution(num_of_elements, num_of_rotation_segments)
 
-    def compute_residual_force(self, dataset: data_factory.FittingDataset, i: int, can_log=False):
+    def compute_total_force_inertial_frame_frd(self, dataset: data_factory.FittingDataset, i: int, can_log=False):
         f_0 = self.compute_model_thrust(dataset.u_free_0[i], 
                                 dataset.v_forward_0[i], 
                                 dataset.shared_r_disk[i], 
@@ -118,11 +118,110 @@ class BemtParamFitter:
             self.logger["f_3"].append(f_3)
             self.logger["f_total"].append(f)
             self.logger["f_inertial_frame_frd"].append(f_inertial_frame_frd)
+        return f_inertial_frame_frd
 
-        f_gt_inertial_frame = -self.params.m * parameters.Environment.g*np.array([0.0, 0.0, 1.0]) + self.params.m * dataset.dv[i]
-        f_gt_inertial_frame = utils.FrdFluConverter.flip_vector(f_gt_inertial_frame)  # flip to FRD frame
-        f_gt_body_frame = dataset.shared_r_disk[i].T@f_gt_inertial_frame
-        f_residual = f - f_gt_body_frame
+    def compute_total_force_inertial_frame_frd_with_lookup_table(self, dataset: data_factory.FittingDataset, i: int, lookup_table: propeller_lookup_table.PropellerLookupTable.Reader, can_log=False):
+        f_0 = BemtParamFitter.compute_thrust_with_lookup_table(
+            dataset.u_free_0[i],
+            dataset.v_forward_0[i],
+            dataset.shared_r_disk[i],
+            dataset.omega_0[i],
+            self.params.is_ccw_blade[0],
+            lookup_table
+        )
+
+        f_0_debug = self.compute_model_thrust(
+            dataset.u_free_0[i],
+            dataset.v_forward_0[i],
+            dataset.shared_r_disk[i],
+            dataset.omega_0[i],
+            self.params.is_ccw_blade[0]
+        )
+
+
+        f_1 = BemtParamFitter.compute_thrust_with_lookup_table(
+            dataset.u_free_1[i],
+            dataset.v_forward_1[i],
+            dataset.shared_r_disk[i],
+            dataset.omega_1[i],
+            self.params.is_ccw_blade[1],
+            lookup_table
+        )
+        
+        f_1_debug = self.compute_model_thrust(
+            dataset.u_free_1[i],
+            dataset.v_forward_1[i],
+            dataset.shared_r_disk[i],
+            dataset.omega_1[i],
+            self.params.is_ccw_blade[1]
+        )
+
+
+        f_2 = BemtParamFitter.compute_thrust_with_lookup_table(
+            dataset.u_free_2[i],
+            dataset.v_forward_2[i],
+            dataset.shared_r_disk[i],
+            dataset.omega_2[i],
+            self.params.is_ccw_blade[2],
+            lookup_table
+        )
+
+        f_2_debug = self.compute_model_thrust(
+            dataset.u_free_2[i],
+            dataset.v_forward_2[i],
+            dataset.shared_r_disk[i],
+            dataset.omega_2[i],
+            self.params.is_ccw_blade[2]
+        )
+
+
+        f_3 = BemtParamFitter.compute_thrust_with_lookup_table(
+            dataset.u_free_3[i],
+            dataset.v_forward_3[i],
+            dataset.shared_r_disk[i],
+            dataset.omega_3[i],
+            self.params.is_ccw_blade[3],
+            lookup_table
+        )
+
+        f_3_debug = self.compute_model_thrust(
+            dataset.u_free_3[i],
+            dataset.v_forward_3[i],
+            dataset.shared_r_disk[i],
+            dataset.omega_3[i],
+            self.params.is_ccw_blade[3]
+        )
+
+        print(f"dataset.u_free_0[i]: {dataset.u_free_0[i]}, dataset.v_forward_0[i]: {dataset.v_forward_0[i]}, dataset.shared_r_disk[i]: {dataset.shared_r_disk[i]}, dataset.omega_0[i]: {dataset.omega_0[i]}, is_ccw_blade: {self.params.is_ccw_blade[0]}")
+        print(f"dataset.u_free_1[i]: {dataset.u_free_1[i]}, dataset.v_forward_1[i]: {dataset.v_forward_1[i]}, dataset.shared_r_disk[i]: {dataset.shared_r_disk[i]}, dataset.omega_1[i]: {dataset.omega_1[i]}, is_ccw_blade: {self.params.is_ccw_blade[1]}")
+        print(f"dataset.u_free_2[i]: {dataset.u_free_2[i]}, dataset.v_forward_2[i]: {dataset.v_forward_2[i]}, dataset.shared_r_disk[i]: {dataset.shared_r_disk[i]}, dataset.omega_2[i]: {dataset.omega_2[i]}, is_ccw_blade: {self.params.is_ccw_blade[2]}")
+        print(f"dataset.u_free_3[i]: {dataset.u_free_3[i]}, dataset.v_forward_3[i]: {dataset.v_forward_3[i]}, dataset.shared_r_disk[i]: {dataset.shared_r_disk[i]}, dataset.omega_3[i]: {dataset.omega_3[i]}, is_ccw_blade: {self.params.is_ccw_blade[3]}")
+
+        print(f"f_0: {f_0}, f_0_debug: {dataset.shared_r_disk[i] @ f_0_debug}")
+        print(f"f_1: {f_1}, f_1_debug: {dataset.shared_r_disk[i] @ f_1_debug}")
+        print(f"f_2: {f_2}, f_2_debug: {dataset.shared_r_disk[i] @ f_2_debug}")
+        print(f"f_3: {f_3}, f_3_debug: {dataset.shared_r_disk[i] @ f_3_debug}")
+
+        f_inertial_frame_flu = f_0 + f_1 + f_2 + f_3
+        f_inertial_frame_frd = utils.FrdFluConverter.flip_vector(f_inertial_frame_flu)
+        return f_inertial_frame_frd
+
+    def compute_residual_force(self, f_inertial_frame_frd, a_groundtruth):
+        """Compute the residual force between the model thrust and the ground truth thrust.
+        Assumes a_groundtruth is in the inertial frame (FRD).
+        """
+        f_gt_inertial_frame = -self.params.m * parameters.Environment.g*np.array([0.0, 0.0, 1.0]) + self.params.m * a_groundtruth
+        f_residual = f_inertial_frame_frd - f_gt_inertial_frame
+        print(f"f_inertial_frame_frd: {f_inertial_frame_frd}")
+        print(f"f_gt_inertial_frame: {f_gt_inertial_frame}")
+        return f_residual
+
+    def get_residual_force(self, dataset: data_factory.FittingDataset, i: int, can_log=False, lookup_table=None, is_using_lookup_table=False):
+        if is_using_lookup_table:
+            f_inertial_frame_frd = self.compute_total_force_inertial_frame_frd_with_lookup_table(dataset, i, lookup_table, can_log)
+        else:
+            f_inertial_frame_frd = self.compute_total_force_inertial_frame_frd(dataset, i, can_log)
+        f_residual = self.compute_residual_force(f_inertial_frame_frd, dataset.dv[i])
         return f_residual
 
     def compute_model_thrust(self, u_free, v_forward, r_disk, omega, is_ccw_blade):
@@ -132,7 +231,12 @@ class BemtParamFitter:
             f_x, f_y, f_z, v_i = self.bet_instance.get_rotor_forces(u_free, v_forward, r_disk, -omega, is_ccw_blade) # negative omega for CW rotation, this is an interface mismatch
         return np.array([f_x, f_y, f_z])
 
-    def get_loss(self, x, datasets: list[data_factory.FittingDataset], can_log=False):
+    @staticmethod
+    def compute_thrust_with_lookup_table(u_free, v_forward, r_disk, omega, is_ccw_blade, lookup_table: propeller_lookup_table.PropellerLookupTable.Reader):
+        thrust, _ = lookup_table.get_rotor_forces(u_free, v_forward, r_disk, omega, is_ccw_blade)
+        return thrust
+    
+    def get_loss(self, x, datasets: list[data_factory.FittingDataset], can_log=False, lookup_table=None, is_using_lookup_table=False):
         
         self.blade.cl_1, self.blade.cl_2, self.blade.cd, self.blade.alpha_0 = x 
 
@@ -143,7 +247,7 @@ class BemtParamFitter:
             loss_per_data_set = 0.0
             num_of_samples_per_dataset = data_len // self.sample_distance
             for i in range(0, data_len, self.sample_distance):
-                f_residual = self.compute_residual_force(dataset, i, can_log)
+                f_residual = self.get_residual_force(dataset, i, can_log, lookup_table, is_using_lookup_table)
                 loss_f = self.horizontal_weight*(f_residual[0]**2 + f_residual[1]**2) + f_residual[2]**2
                 loss_per_data_set += loss_f
             loss_per_data_set = loss_per_data_set / num_of_samples_per_dataset
@@ -199,11 +303,6 @@ class BemtParamFitter:
         else:
             print("Optimization failed:", result.message)
             return None
-
-    @staticmethod
-    def compute_thrust_with_lookup_table(u_free, v_forward, r_disk, omega, is_ccw_blade, lookup_table: propeller_lookup_table.PropellerLookupTable.Reader):
-        thrust, _ = lookup_table.get_rotor_forces(u_free, v_forward, r_disk, omega, is_ccw_blade)
-        return thrust
 
     def plot_the_fit(self, dataset):
         f_total_intertial_frame_gt = [
@@ -425,6 +524,7 @@ def fit_params(datasets: list[data_factory.FittingDataset], blade: FittedBlade, 
         return None
 
 def compute_thrust_with_lookup_table(u_free, v_forward, r_disk, omega, is_ccw_blade, lookup_table: propeller_lookup_table.PropellerLookupTable.Reader):
+    # The output is in inertial frame
     thrust, _ = lookup_table.get_rotor_forces(u_free, v_forward, r_disk, omega, is_ccw_blade)
     return thrust
 
