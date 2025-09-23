@@ -15,7 +15,7 @@ from torch.utils.data.dataset import random_split
 
 import normalization
 
-class LearningDataset(Dataset):
+class DiamlDataset(Dataset):
 
     def __init__(self,
         input: np.ndarray,
@@ -51,6 +51,40 @@ class LearningDataset(Dataset):
         sample = {'input': torch.tensor(input), 
                   'output': torch.tensor(output), 
                   'c': torch.tensor(self.c)}
+        return sample
+
+class SimpleDataset(Dataset):
+
+    def __init__(self,
+        input: np.ndarray,
+        output: np.ndarray,
+        input_mean_vector,
+        input_scale_vector,
+        label_mean_vector,
+        label_scale_vector,
+        source_file: str) -> None:
+        """
+
+        Args:
+            inputs (np.ndarray): velocity (3) + quaternion (4) + input (4) = 11
+            outputs (np.ndarray): disturbance force (3)
+        """
+        self.input = input
+        self.output = output
+        self.source_file = source_file
+        self.input_mean_vector = input_mean_vector
+        self.input_scale_vector = input_scale_vector
+        self.label_mean_vector = label_mean_vector
+        self.label_scale_vector = label_scale_vector
+
+    def __len__(self):
+        return len(self.input)
+
+    def __getitem__(self, idx):
+        input = self.input[idx, :]
+        output = self.output[idx, :]
+        sample = {'input': torch.tensor(input), 
+                  'output': torch.tensor(output)}
         return sample
 
 
@@ -108,7 +142,7 @@ class FittingDataset:
         return len(self.u_free_0)
 
 
-class DataFactoryParent:
+class DataFactory:
     def __init__(self) -> None:
         pass
 
@@ -136,15 +170,15 @@ class DataFactoryParent:
 
     @staticmethod
     def make_data_frame_from_csv(file: str, selected_columns: list[str]=None) -> pd.DataFrame:
-        file_path = DataFactoryParent.get_path_to_data_file(file)
+        file_path = DataFactory.get_path_to_data_file(file)
         if selected_columns is None:
             data = pd.read_csv(file_path)
         else:
             data = pd.read_csv(file_path, usecols=selected_columns)
-        DataFactoryParent.process_raw_data_frame(data)
+        DataFactory.process_raw_data_frame(data)
         return data
 
-class FittingFactory(DataFactoryParent):
+class FittingFactory(DataFactory):
     def __init__(self) -> None:
         super().__init__()
 
@@ -153,72 +187,29 @@ class FittingFactory(DataFactoryParent):
         Each file in the data menu is a different condition, the length of the dataset is the number of conditions"""
         datasets = []
         for file in data_menu:
-            file_path = DataFactoryParent.get_path_to_data_file(file)
+            file_path = DataFactory.get_path_to_data_file(file)
             # data = pd.read_csv(file_path)
-            data = DataFactoryParent.make_data_frame_from_csv(file)
+            data = DataFactory.make_data_frame_from_csv(file)
             dataset = FittingDataset(data, file_path)
             datasets.append(dataset)
         return datasets
     
-class DataFactory(DataFactoryParent):
-    """Data manager is responsible for:
-    1. defining the list of data to be used to train
-    2. check which columns are input and which are labels
-    3. generate LearningDataset and then LoaderSets for trainer
-    4. normalize the data"""
+class TrainingDataFactory(DataFactory):
     def __init__(self, input_label_map_file: str) -> None:
-        self.num_of_conditions = 0
-        self.input_label_map = DataFactory.get_map(input_label_map_file)
-        self.input_headers = DataFactory.extract_header_from_input_label_map(self.input_label_map["input"])
-        self.label_headers = DataFactory.extract_header_from_input_label_map(self.input_label_map["label"])
+        super().__init__()
+        self.input_label_map = TrainingDataFactory.get_map(input_label_map_file)
+        self.input_headers = TrainingDataFactory.extract_header_from_input_label_map(self.input_label_map["input"])
+        self.label_headers = TrainingDataFactory.extract_header_from_input_label_map(self.input_label_map["label"])
         self.input_normalization, self.label_normalization = self.initialize_normalization_dict()
-        self.normalization_params_file_path = DataFactory.find_path_to_normalization_params_file(input_label_map_file)
-        self.config = DataFactory.load_config("data_factory_config.yaml")
+        self.normalization_params_file_path = TrainingDataFactory.find_path_to_normalization_params_file(input_label_map_file)
+        self.config = TrainingDataFactory.load_config("data_factory_config.yaml")        
 
     @staticmethod
-    def find_input_label_column(input_label_map: dict):
-        """use the config files to find the input and label columns"""
-        input_columns = []
-        for key, value in input_label_map["input"].items():
-            input_columns.append(key)
-        label_columns = []
-        for key, value in input_label_map["label"].items():
-            label_columns.append(key)
-        return input_columns, label_columns
-    
-    @staticmethod
     def get_map(map_file: str) -> dict:
-        map_file_path = DataFactoryParent.get_path_to_data_file(map_file)
+        map_file_path = DataFactory.get_path_to_data_file(map_file)
         with open(map_file_path, 'r') as file:
             map = yaml.safe_load(file)
         return map
-
-    @staticmethod
-    def load_config(config_file: str):
-        """Load configuration from YAML file"""
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(current_dir, config_file)
-        with open(config_path, 'r') as file:
-            config = yaml.safe_load(file)
-        return config    
-    
-    def initialize_normalization_dict(self):
-        """When normalization applies to each dataset, this template can be copied as a starting point."""
-        input_normalization: dict[str, normalization.Normalization] = {}
-        label_normalization: dict[str, normalization.Normalization] = {}
-        for field, dimensions in self.input_label_map["input"].items():
-            if dimensions is None:
-                input_normalization[field] = normalization.Normalization()
-            else:
-                for dim in dimensions:
-                    input_normalization[f"{field}_{dim}"] = normalization.Normalization()
-        for field, dimensions in self.input_label_map["label"].items():
-            if dimensions is None:
-                label_normalization[field] = normalization.Normalization()
-            else:
-                for dim in dimensions:
-                    label_normalization[f"{field}_{dim}"] = normalization.Normalization()
-        return input_normalization, label_normalization
 
     @staticmethod
     def extract_header_from_input_label_map(column_names: dict[list]) -> list[str]:
@@ -243,123 +234,80 @@ class DataFactory(DataFactoryParent):
         data = np.column_stack(data)
         return data
 
+    @staticmethod
+    def find_path_to_normalization_params_file(input_label_map_file: str) -> str:
+        input_label_map_file_path = DataFactory.get_path_to_data_file(input_label_map_file)
+        input_label_map_dir = os.path.dirname(input_label_map_file_path)
+        normalization_params_file_path = os.path.join(input_label_map_dir, "normalization_params.yaml")
+        return normalization_params_file_path
+
+    @staticmethod
+    def load_config(config_file: str):
+        """Load configuration from YAML file"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(current_dir, config_file)
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+        return config    
+
+    @staticmethod
+    def find_input_label_column(input_label_map: dict):
+        """use the config files to find the input and label columns"""
+        input_columns = []
+        for key, value in input_label_map["input"].items():
+            input_columns.append(key)
+        label_columns = []
+        for key, value in input_label_map["label"].items():
+            label_columns.append(key)
+        return input_columns, label_columns
+
     def load_sim_data(self, file_name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Load the csv file and find the columns of interest."""
-        input_columns, label_columns = DataFactory.find_input_label_column(self.input_label_map)
-        df = DataFactoryParent.make_data_frame_from_csv(file_name, input_columns + label_columns)
-        input_data = DataFactory.extract_data_from_data_frame(self.input_label_map["input"], df)
-        label_data = DataFactory.extract_data_from_data_frame(self.input_label_map["label"], df)
+        input_columns, label_columns = TrainingDataFactory.find_input_label_column(self.input_label_map)
+        df = DataFactory.make_data_frame_from_csv(file_name, input_columns + label_columns)
+        input_data = TrainingDataFactory.extract_data_from_data_frame(self.input_label_map["input"], df)
+        label_data = TrainingDataFactory.extract_data_from_data_frame(self.input_label_map["label"], df)
         return input_data, label_data
 
-    def convert_sim_to_training_data(self, input_data: np.ndarray, label_data: np.ndarray, condition_id: int, file: str) -> LearningDataset:
-        # normalize data before putting it into the dataset
-        result = LearningDataset(input_data,   # input normalization will be done in the network
-                                 (label_data - self.label_mean_vector)*self.label_scale_vector,
-                                 condition_id,
-                                 self.input_mean_vector,
-                                 self.input_scale_vector,
-                                 self.label_mean_vector,
-                                 self.label_scale_vector,
-                                 file)
-        return result
-
-    def prepare_datasets(self, data_menu: list, can_inspect_data: bool=False) -> list[LearningDataset]:
-        """Prepare the datasets from the data menu
-        Each file in the data menu is a different condition, the length of the dataset is the number of conditions"""
-        datasets = []
-        condition_id = 0    # ID value doesn't matter, but each different condition should have different ID
-        for file in data_menu:
-            input_data, label_data = self.load_sim_data(file)
-            if can_inspect_data:
-                DataFactory.plot_dataset_distribution_grid(input_data, self.input_headers, file + " input")  # inspect the data
-                DataFactory.plot_dataset_distribution_grid(label_data, self.label_headers, file + " label")  # inspect the data
-            dataset = self.convert_sim_to_training_data(input_data, label_data, condition_id, file)
-            condition_id += 1
-            datasets.append(dataset)
-        return datasets
-
-    def get_data_loaders(self, training_data: LearningDataset) -> tuple[DataLoader, DataLoader]:
-        """Separate the dataset into two parts: part1 for phi NN and part2 for adaptation coeffecients, 
-        generate a data loader for each part"""
-        length = int(len(training_data)*self.config["data_usage_ratio"])
-        print(f"Using {length} samples from the dataset for training", f"from source file: {training_data.source_file}")
-        ratio = self.config["phi_shot"]/(self.config["phi_shot"] + self.config["a_shot"])
-        part_phi = int(length*ratio)
-        part_a = length - part_phi
-        if self.config["can_shuffle"]:
-            phi_set, a_set, _ = random_split(training_data, [part_phi, part_a, len(training_data) - part_phi - part_a])
-        else:
-            phi_input = training_data.input[:part_phi]
-            phi_output = training_data.output[:part_phi]
-            a_input = training_data.input[part_phi:part_phi + part_a]
-            a_output = training_data.output[part_phi:part_phi + part_a]
-
-            phi_set = LearningDataset(phi_input, phi_output, 
-                                      training_data.c,
-                                      training_data.input_mean_vector,
-                                      training_data.input_scale_vector,
-                                      training_data.label_mean_vector,
-                                      training_data.label_scale_vector,
-                                      training_data.source_file)
-
-            a_set = LearningDataset(a_input, a_output, 
-                                    training_data.c,
-                                    training_data.input_mean_vector,
-                                    training_data.input_scale_vector,
-                                    training_data.label_mean_vector,
-                                    training_data.label_scale_vector,
-                                    training_data.source_file)
-        phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=self.config["phi_shot"], shuffle=self.config["can_shuffle"])
-        a_loader = torch.utils.data.DataLoader(a_set, batch_size=self.config["a_shot"], shuffle=True)
-        return phi_loader, a_loader
-
-    def prepare_loadersets(self, datasets: list[LearningDataset]) -> tuple[list[DataLoader], list[DataLoader]]:
-        """Generate a list of data loaders for phi and a respectively"""
-        phi_set = []
-        a_set = []
-        for data in datasets:
-            phi_loader, a_loader = self.get_data_loaders(data)
-            phi_set.append(phi_loader)
-            a_set.append(a_loader)
-        return phi_set, a_set
-
-    def get_data(self, data_menu: list, can_inspect_data: bool=False) -> tuple[list[DataLoader], list[DataLoader]]:
-        """Main API of DataFactory"""
-        datasets = self.prepare_datasets(data_menu, can_inspect_data)
-        phi_set, a_set = self.prepare_loadersets(datasets)
-        return phi_set, a_set
+    def initialize_normalization_dict(self):
+        """When normalization applies to each dataset, this template can be copied as a starting point."""
+        input_normalization: dict[str, normalization.Normalization] = {}
+        label_normalization: dict[str, normalization.Normalization] = {}
+        for field, dimensions in self.input_label_map["input"].items():
+            if dimensions is None:
+                input_normalization[field] = normalization.Normalization()
+            else:
+                for dim in dimensions:
+                    input_normalization[f"{field}_{dim}"] = normalization.Normalization()
+        for field, dimensions in self.input_label_map["label"].items():
+            if dimensions is None:
+                label_normalization[field] = normalization.Normalization()
+            else:
+                for dim in dimensions:
+                    label_normalization[f"{field}_{dim}"] = normalization.Normalization()
+        return input_normalization, label_normalization
     
     def normalize_data(self, data_menu: list) -> None:
         """Normalize the data using the mean and standard deviation"""
         # traverse the datasets
-        for file in self.data_menu:
-            input_data, label_data = DataFactory.load_sim_data(file)
-            for column in self.input_columns:
+        for file in data_menu:
+            input_data, label_data = TrainingDataFactory.load_sim_data(file)
+            for column in self.input_headers:
                 self.input_normalization[column].add_batch(input_data)
-            for column in self.label_columns:
+            for column in self.label_headers:
                 self.label_normalization[column].add_batch(label_data)
 
     def generate_normalization_params_file(self, output_path: str) -> None:
         """Generate the normalization parameters for input and output"""
         content = {"input": {}, "output": {}}
-        for column in self.input_columns:
+        for column in self.input_headers:
             mean, scale = self.input_normalization[column].get_normalization_params()
             content["input"][column] = {"mean": mean, "scale": scale}
-        for column in self.label_columns:
+        for column in self.label_headers:
             mean, scale = self.label_normalization[column].get_normalization_params()
             content["output"][column] = {"mean": mean, "scale": scale}
         with open(output_path, 'w') as file:
             yaml.dump(content, file)
-
-    def set_num_of_conditions(self, data_menu: list) -> None:
-        self.num_of_conditions = len(data_menu)
-
-    @staticmethod
-    def find_path_to_normalization_params_file(input_label_map_file: str) -> str:
-        input_label_map_file_path = DataFactoryParent.get_path_to_data_file(input_label_map_file)
-        input_label_map_dir = os.path.dirname(input_label_map_file_path)
-        normalization_params_file_path = os.path.join(input_label_map_dir, "normalization_params.yaml")
-        return normalization_params_file_path
 
     def make_normalization_params(self, data_menu: list) -> None:
         # if the normalization params file is not generated, generate it
@@ -428,14 +376,6 @@ class DataFactory(DataFactoryParent):
         self.label_mean_vector = label_mean_vector
         self.label_scale_vector = label_scale_vector
 
-    def inspect_data(self, input_frames: pd.DataFrame, output_frames: pd.DataFrame, file: str) -> None:
-        """Plot input and output data distributions."""
-        input_data, input_titles = DataFactory.get_norms_of_fields(input_frames)
-        output_data, output_titles = DataFactory.get_norms_of_fields(output_frames)
-        data = input_data + output_data
-        titles = input_titles + output_titles
-        DataFactory.plot_dataset_distribution_grid(data, titles, file)
-
     @staticmethod
     def plot_dataset_distribution_grid(data: np.ndarray, sub_titles: list[str], title: str, bins=50, figsize=(20, 10), cols=7):
         num_features = data.shape[1]
@@ -451,6 +391,156 @@ class DataFactory(DataFactoryParent):
         for j in range(num_features, len(axes)):
             fig.delaxes(axes[j])
         fig.suptitle(title)
+
+class DiamlDataFactory(TrainingDataFactory):
+    """Data manager is responsible for:
+    1. defining the list of data to be used to train
+    2. check which columns are input and which are labels
+    3. generate LearningDataset and then LoaderSets for trainer
+    4. normalize the data"""
+    def __init__(self, input_label_map_file: str) -> None:
+        super().__init__(input_label_map_file)
+        self.num_of_conditions = 0
+
+    def set_num_of_conditions(self, data_menu: list) -> None:
+        self.num_of_conditions = len(data_menu)
+
+    def convert_sim_to_training_data(self, input_data: np.ndarray, label_data: np.ndarray, condition_id: int, file: str) -> DiamlDataset:
+        # normalize data before putting it into the dataset
+        result = DiamlDataset(input_data,   # input normalization will be done in the network
+                                 (label_data - self.label_mean_vector)*self.label_scale_vector,
+                                 condition_id,
+                                 self.input_mean_vector,
+                                 self.input_scale_vector,
+                                 self.label_mean_vector,
+                                 self.label_scale_vector,
+                                 file)
+        return result
+
+    def prepare_datasets(self, data_menu: list, can_inspect_data: bool=False) -> list[DiamlDataset]:
+        """Prepare the datasets from the data menu
+        Each file in the data menu is a different condition, the length of the dataset is the number of conditions"""
+        datasets = []
+        condition_id = 0    # ID value doesn't matter, but each different condition should have different ID
+        for file in data_menu:
+            input_data, label_data = self.load_sim_data(file)
+            if can_inspect_data:
+                TrainingDataFactory.plot_dataset_distribution_grid(input_data, self.input_headers, file + " input")  # inspect the data
+                TrainingDataFactory.plot_dataset_distribution_grid(label_data, self.label_headers, file + " label")  # inspect the data
+            dataset = self.convert_sim_to_training_data(input_data, label_data, condition_id, file)
+            condition_id += 1
+            datasets.append(dataset)
+        return datasets
+
+    def get_data_loaders(self, training_data: DiamlDataset) -> tuple[DataLoader, DataLoader]:
+        """Separate the dataset into two parts: part1 for phi NN and part2 for adaptation coeffecients, 
+        generate a data loader for each part"""
+        length = int(len(training_data)*self.config["data_usage_ratio"])
+        print(f"Using {length} samples from the dataset for training", f"from source file: {training_data.source_file}")
+        ratio = self.config["phi_shot"]/(self.config["phi_shot"] + self.config["a_shot"])
+        part_phi = int(length*ratio)
+        part_a = length - part_phi
+        if self.config["can_shuffle"]:
+            phi_set, a_set, _ = random_split(training_data, [part_phi, part_a, len(training_data) - part_phi - part_a])
+        else:
+            phi_input = training_data.input[:part_phi]
+            phi_output = training_data.output[:part_phi]
+            a_input = training_data.input[part_phi:part_phi + part_a]
+            a_output = training_data.output[part_phi:part_phi + part_a]
+
+            phi_set = DiamlDataset(phi_input, phi_output, 
+                                      training_data.c,
+                                      training_data.input_mean_vector,
+                                      training_data.input_scale_vector,
+                                      training_data.label_mean_vector,
+                                      training_data.label_scale_vector,
+                                      training_data.source_file)
+
+            a_set = DiamlDataset(a_input, a_output, 
+                                    training_data.c,
+                                    training_data.input_mean_vector,
+                                    training_data.input_scale_vector,
+                                    training_data.label_mean_vector,
+                                    training_data.label_scale_vector,
+                                    training_data.source_file)
+        phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=self.config["phi_shot"], shuffle=self.config["can_shuffle"])
+        a_loader = torch.utils.data.DataLoader(a_set, batch_size=self.config["a_shot"], shuffle=True)
+        return phi_loader, a_loader
+
+    def prepare_loadersets(self, datasets: list[DiamlDataset]) -> tuple[list[DataLoader], list[DataLoader]]:
+        """Generate a list of data loaders for phi and a respectively"""
+        phi_set = []
+        a_set = []
+        for data in datasets:
+            phi_loader, a_loader = self.get_data_loaders(data)
+            phi_set.append(phi_loader)
+            a_set.append(a_loader)
+        return phi_set, a_set
+
+    def get_data(self, data_menu: list, can_inspect_data: bool=False) -> tuple[list[DataLoader], list[DataLoader]]:
+        """Main API of DataFactory"""
+        datasets = self.prepare_datasets(data_menu, can_inspect_data)
+        phi_set, a_set = self.prepare_loadersets(datasets)
+        return phi_set, a_set
+
+
+class SimpleDataFactory(TrainingDataFactory):
+    def __init__(self, input_label_map_file: str) -> None:
+        super().__init__(input_label_map_file)
+
+    def convert_sim_to_training_data(self, input_data: np.ndarray, label_data: np.ndarray, file: str) -> SimpleDataset:
+        # normalize data before putting it into the dataset
+        result = SimpleDataset(input_data,   # input normalization will be done in the network
+                               (label_data - self.label_mean_vector)*self.label_scale_vector,
+                               self.input_mean_vector,
+                               self.input_scale_vector,
+                               self.label_mean_vector,
+                               self.label_scale_vector,
+                               file)
+        return result
+
+    def prepare_datasets(self, data_menu: list, can_inspect_data: bool=False) -> list[SimpleDataset]:
+        """Prepare the datasets from the data menu
+        Each file in the data menu is a different condition, the length of the dataset is the number of conditions"""
+        datasets = []
+        for file in data_menu:
+            input_data, label_data = self.load_sim_data(file)
+            if can_inspect_data:
+                TrainingDataFactory.plot_dataset_distribution_grid(input_data, self.input_headers, file + " input")  # inspect the data
+                TrainingDataFactory.plot_dataset_distribution_grid(label_data, self.label_headers, file + " label")  # inspect the data
+            dataset = self.convert_sim_to_training_data(input_data, label_data, file)
+            datasets.append(dataset)
+        return datasets
+    
+    def get_data_loaders(self, training_data: SimpleDataset) -> DataLoader:
+        """Generate a data loader for the dataset"""
+        length = int(len(training_data)*self.config["data_usage_ratio"])
+        print(f"Using {length} samples from the dataset for training", f"from source file: {training_data.source_file}")
+        dataset = SimpleDataset(training_data.input, 
+                      training_data.output, 
+                      training_data.input_mean_vector,
+                      training_data.input_scale_vector,
+                      training_data.label_mean_vector,
+                      training_data.label_scale_vector,
+                      training_data.source_file)
+
+        loader = torch.utils.data.DataLoader(dataset, batch_size=self.config["simple_shot"], shuffle=self.config["can_shuffle"])
+        return loader
+
+    def prepare_loaderset(self, datasets: list[SimpleDataset]) -> list[DataLoader]:
+        """Generate a list of data loaders"""
+        loaderset = []
+        for data in datasets:
+            single_loader = self.get_data_loaders(data)
+            loaderset.append(single_loader)
+        return loaderset
+
+    def get_data(self, data_menu: list, can_inspect_data: bool=False) -> list[DataLoader]:
+        """Main API of DataFactory"""
+        datasets = self.prepare_datasets(data_menu, can_inspect_data)
+        loaderset = self.prepare_loaderset(datasets)
+        return loaderset
+    
 
 def generate_data_list(subfolder, file_extension=".csv") -> list[str]:
     """

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import torch
 
 from learning import training_manager
+from learning import model
 
 class UnitDisturbance:
     """disturbance in a single dimension
@@ -116,7 +117,7 @@ class UnitDisturbance:
 
 class DisturbanceEstimator:
     def __init__(self, model_name: str, dt: float) -> None:
-        self.phi, h = training_manager.load_model(model_name)
+        self.phi, h = model.load_diaml_model(model_name)
         self.phi.eval()
         self.num_of_kernals = self.phi.dim_of_output
         self.dof_of_disturbance = 6
@@ -146,6 +147,9 @@ class DisturbanceEstimator:
 
 # make another baseline disturbance estimator that don't take in the kernel
 class BaselineDisturbanceEstimator:
+    """Baseline disturbance estimator: equivalent to using a kernel of 1, the a_hat will be the disturbance.
+    This is equivalent to Neural-Fly constant example in the paper. This is a pure adaptive disturbance estimator that takes control error as estimation input and assumes disturbance is constant.
+    """
     def __init__(self, dt: float) -> None:
         self.dof_of_disturbance = 6
         self.dt = dt

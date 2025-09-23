@@ -67,7 +67,34 @@ class HNet(MultilayerNet):
     def __init__(self, dim_of_input, dim_of_output, dim_of_layers: list):
         super().__init__(dim_of_input, dim_of_output, dim_of_layers, can_append_bias=False)        
     
-class ModelFactory:
+class SimpleNet(MultilayerNet):
+    """A simple feedforward network without normalization or bias append"""
+    def __init__(self, dim_of_input, dim_of_output, dim_of_layers: list, input_mean, input_scale, output_mean, output_scale):
+        super().__init__(dim_of_input, dim_of_output, dim_of_layers, can_append_bias=False)
+        # Normalization: use register_buffer to avoid being changed by optimizer
+        self.register_buffer("input_mean", torch.tensor(input_mean, dtype=torch.float32))
+        self.register_buffer("input_scale", torch.tensor(input_scale, dtype=torch.float32))
+        self.register_buffer("output_mean", torch.tensor(output_mean, dtype=torch.float32))
+        self.register_buffer("output_scale", torch.tensor(output_scale, dtype=torch.float32))
+
+    # def forward(self, x: torch.Tensor) -> torch.Tensor:
+    #     # Normalize input, assuming x is raw input <- should not do that. dataset is already normalized. Todo: check inference implementation
+    #     x = (x - self.input_mean) * self.input_scale
+
+    #     for layer in self.layers[:-1]:
+    #         x = F.relu(layer(x))
+    #     x = self.layers[-1](x)
+    #     if len(x.shape) == 1:
+    #         # single input (batch size == 1)
+    #         one = torch.ones(1, device=x.device)
+    #         return torch.cat([one, x])
+    #     else:
+    #         # batch input for training (assuming that x is at most 2D)
+    #         ones = torch.ones([x.shape[0], 1], device=x.device)
+    #         return torch.cat([ones, x], dim=-1)
+
+
+class DiamlModelFactory:
     def __init__(self,
                  num_of_conditions,
                  dim_of_input,
@@ -115,8 +142,8 @@ class ModelFactory:
     def set_up_config(customized_config: dict = None):
         """Set up the model configuration. If customized_config is None, load the default config."""
         if customized_config is None:
-            config_path = ModelFactory.get_default_config_path()
-            config = ModelFactory.load_config(config_path)
+            config_path = DiamlModelFactory.get_default_config_path()
+            config = DiamlModelFactory.load_config(config_path)
         else:
             config = customized_config  # in case of loading the trained model, use the documented config at generation time
         return config
@@ -146,9 +173,84 @@ class ModelFactory:
             "label_scale": self.label_scale,
             "customized_config": self.config
         }
+    
+class SimpleNetFactory:
+    def __init__(self,
+                 dim_of_input,
+                 dim_of_label,
+                 input_mean,
+                 input_scale,
+                 label_mean,
+                 label_scale,
+                 customized_config: dict = None
+                 ):
+        """consider the following example to predict disturbance forces:
+        (v_0 v_1 v_2 q_0 q_1 q_2 q_3 pwm_0 pwm_1 pwm_2 pwm_3)
+        velocity (3) + quaternion (4) + input (4) = 11
+        dim_of_input: input dimension (11 in this case)
+        dim_of_feature: features that phi_net need to capture (not necessarily the same as dim of disturbance forces because it needs to interact with adaptation coefficients)
+        From the paper, the feature dimension is 5.
+        dim_of_label: dimension of label vector. Because we are trying to compare the disturbance force in x y z direction,
+        the label vector is a 3-dim vector because disturbance torque is not estimated in the paper.
+        """               
+        self.config = self.set_up_config(customized_config)
+        self.dim_of_input = dim_of_input
+        self.dim_of_label = dim_of_label
+        self.input_mean = input_mean
+        self.input_scale = input_scale
+        self.label_mean = label_mean
+        self.label_scale = label_scale        
+
+    def generate_nets(self):
+        net = SimpleNet(
+            self.dim_of_input,
+            self.dim_of_label,
+            self.config["SimpleNet"]["hidden_layer_dimensions"],
+            self.input_mean,
+            self.input_scale,
+            self.label_mean,
+            self.label_scale
+        )
+        return net
+
+    @staticmethod
+    def set_up_config(customized_config: dict = None):
+        """Set up the model configuration. If customized_config is None, load the default config."""
+        if customized_config is None:
+            config_path = DiamlModelFactory.get_default_config_path()
+            config = DiamlModelFactory.load_config(config_path)
+        else:
+            config = customized_config  # in case of loading the trained model, use the documented config at generation time
+        return config
+
+    @staticmethod
+    def get_default_config_path():
+        """Get the default path of the model configuration file"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(current_dir, "model_config.yaml")
+
+    @staticmethod
+    def load_config(config_path: str):
+        """Load model configuration from YAML file"""
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+        return config
+    
+    def generate_self_config(self) -> dict:
+        """Generate a self-contained configuration dictionary. 
+        Use this as input argument to recreate the same factory and produce the exact model later."""
+        return {
+            "dim_of_input": self.dim_of_input,
+            "dim_of_label": self.dim_of_label,
+            "input_mean": self.input_mean,
+            "input_scale": self.input_scale,
+            "label_mean": self.label_mean,
+            "label_scale": self.label_scale,
+            "customized_config": self.config
+        }
 
 
-def save_model(name, phi_net: PhiNet, h_net: HNet, model_factory_config: dict, input_label_map: dict) -> None:
+def save_diaml_model(name, phi_net: PhiNet, h_net: HNet, model_factory_config: dict, input_label_map: dict) -> None:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         file_path = os.path.join(current_dir, "model", name + ".pth")
         torch.save({"phi": phi_net.state_dict(),
@@ -158,13 +260,13 @@ def save_model(name, phi_net: PhiNet, h_net: HNet, model_factory_config: dict, i
                     file_path)
         print(f"Model saved to {os.path.relpath(file_path, os.getcwd())}")
 
-def load_model(name) -> tuple[PhiNet, HNet, dict]:
+def load_diaml_model(name) -> tuple[PhiNet, HNet, dict]:
     current_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(current_dir, "model", name + ".pth")       
     package = torch.load(file_path)
 
     # recreate the model factory instance that generated the trained model
-    model_factory_instance = ModelFactory(
+    model_factory_instance = DiamlModelFactory(
         package["model_factory_init_args"]["num_of_conditions"],
         package["model_factory_init_args"]["dim_of_input"],
         package["model_factory_init_args"]["input_mean"],
@@ -182,3 +284,40 @@ def load_model(name) -> tuple[PhiNet, HNet, dict]:
     for key, value in package["phi_net_io_fields"].items():
         print(key, value)
     return phi, h
+
+def save_simple_model(name, simple_net: SimpleNet, model_factory_config: dict, input_label_map: dict) -> None:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(current_dir, "model", name + ".pth")
+        torch.save({"simple": simple_net.state_dict(),
+                    "model_factory_init_args": model_factory_config,
+                    "simple_net_io_fields": input_label_map}, 
+                    file_path)
+        print(f"Model saved to {os.path.relpath(file_path, os.getcwd())}")
+
+def load_simple_model(name) -> SimpleNet:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, "model", name + ".pth")       
+    package = torch.load(file_path)
+
+    # recreate the model factory instance that generated the trained model
+    model_factory_instance = SimpleNetFactory(
+        package["model_factory_init_args"]["dim_of_input"],
+        package["model_factory_init_args"]["dim_of_label"],
+        package["model_factory_init_args"]["input_mean"],
+        package["model_factory_init_args"]["input_scale"],
+        package["model_factory_init_args"]["label_mean"],
+        package["model_factory_init_args"]["label_scale"],
+        customized_config=package["model_factory_init_args"]["customized_config"]
+    )
+    simple_net = model_factory_instance.generate_nets()
+    simple_net.load_state_dict(package["simple"])
+    simple_net.eval()
+    print("simple net input output fields:")
+    for key, value in package["simple_net_io_fields"].items():
+        print(key, value)
+    return simple_net
+
+
+
+
+

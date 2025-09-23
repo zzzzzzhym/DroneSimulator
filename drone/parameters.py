@@ -134,7 +134,7 @@ class Control:
 # miscellaneous parameters (used in disturbance model)
 rotor_radius = 0.2 # [m] 15inch diameter rotor
 c_d = 1.2   # unit free [0.5-1.5]   "An Experimental Study of Drag Coefficients of a Quadrotor Airframe." Table 2
-area_frontal = 0.03*0.0  # m^2 [0.01-0.1]   "An Experimental Study of Drag Coefficients of a Quadrotor Airframe." Table 2
+area_frontal = 0.03  # m^2 [0.01-0.1]   "An Experimental Study of Drag Coefficients of a Quadrotor Airframe." Table 2
 
 if __name__ == "__main__":
     test_instance = TrackingOnSE3()

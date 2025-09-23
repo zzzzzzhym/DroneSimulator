@@ -35,20 +35,21 @@ class DroneController:
         self.force_motor_available = np.array([0.0, 0.0, 0.0, 0.0])
         self.rotation_speed = np.array([0.0, 0.0, 0.0, 0.0])
         # self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_bemt_in_control_train_xz_wind", 0.01)
-        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_wo_bemt_in_control_train_xz_wind", 0.01)
+        self.disturbance_estimator = disturbance_estimator.DisturbanceEstimator("wind_near_wall_wo_bemt_in_control_far_from_wall", 0.01)
         self.f_disturb = np.array([0.0, 0.0, 0.0])
         self.torque_disturb = np.array([0.0, 0.0, 0.0])        
         self.baseline_disturbance_estimator = disturbance_estimator.BaselineDisturbanceEstimator(0.01)
         self.f_disturb_base = np.array([0.0, 0.0, 0.0])
         self.torque_disturb_base = np.array([0.0, 0.0, 0.0])
-        self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6_with_trail")
+        # self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6_with_trail")
+        self.propeller_force_table = propeller_lookup_table.PropellerLookupTable.Reader("apc_8x6_fitted2")
         self.propeller = propeller.apc_8x6
         self.is_warmed_up = False
         self.warm_up_count = 0
         self.warm_up_count_max = 0
         self.is_using_baseline_disturbance_estimator = True   
         self.is_using_any_disturbance_estimator = True
-        self.is_using_inflow_model = False
+        self.is_using_inflow_model = True
         print("DroneController: using inflow model: ", self.is_using_inflow_model)
         print("DroneController: using disturbance estimator: ", self.is_using_any_disturbance_estimator)
         print("DroneController: using baseline disturbance estimator: ", self.is_using_baseline_disturbance_estimator)
