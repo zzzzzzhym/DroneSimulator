@@ -303,9 +303,98 @@ class Trainer:
         if can_print_3d:
             performance_analyzer.plot_tsne_3d_of_a(self.a_trace, list(range(n, n + 10)))
 
-
-
-
-
     
+class SimpleTrainer:
+    def __init__(self,
+                 simple_net: model.MultilayerNet,
+                 loaderset: list[DataLoader],
+                 dim_of_label: int,
+                 validation_callback: callable,
+                 config_file: str = "trainer_config.yaml",
+                 ) -> None:
+        self.simple_net = simple_net
+        self.loaderset = loaderset
+        self.dim_of_label = dim_of_label
+        self.config = Trainer.load_config(config_file)
+        self.criterion = None
+        self.optimizer = None
+        self.validator_callback = validation_callback
+        self.num_of_conditions = len(self.loaderset)
 
+        # initialization
+        self.set_optimizers()
+        self.set_criterion()
+        self.loss_trace = []
+        self.loss_trace_on_validation = []
+        
+    def set_optimizers(self):
+        """Set optimizers for simple_net"""
+        self.optimizer = optim.Adam(self.simple_net.parameters(), lr=self.config["learning_rate"])
+        self.optimizer.zero_grad()
+
+    def set_criterion(self):
+        self.criterion = nn.MSELoss()
+
+    @staticmethod
+    def load_config(config_file: str):
+        """Load model configuration from YAML file"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(current_dir, config_file)
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+        return config
+
+    def step_training(self, epoch: int) -> float:
+        # Randomize the order in which we train over the subdatasets
+        randomized_cases = np.arange(self.num_of_conditions)
+        np.random.shuffle(randomized_cases)
+        
+        loss_sum = 0.0
+        for case_num in randomized_cases:
+            with torch.no_grad():
+                batch = next(iter(self.loaderset[case_num]))
+            self.optimizer.zero_grad()   # reset gradient before each training section starts
+            prediction = self.simple_net(batch['input'])
+            loss = self.criterion(prediction, batch['output'])
+            loss.backward()
+            self.optimizer.step()
+
+            '''
+            Spectral normalization
+            '''
+            if self.config["spectral_norm"] > 0:
+                for param in self.simple_net.parameters():
+                    M = param.detach().numpy()
+                    if M.shape[0] > 0:  # only normalize if the layter takes input (pure bias layer will have shape (0, n))
+                        s = np.linalg.norm(M, 2)
+                        if s > self.config["spectral_norm"]:
+                            param.data = param / s * self.config["spectral_norm"]
+            '''
+            record loss trace
+            '''
+            loss_sum += loss.item()
+        return loss_sum
+    
+    def train_model(self):
+        self.loss_trace = []
+        self.loss_trace_on_validation = []
+        for epoch in range(self.config["num_epochs"]):
+            # set the model to training mode in case validation mode change it to eval mode from previous epoch
+            self.simple_net.train()
+            loss = self.step_training(epoch)
+            self.loss_trace.append(loss/self.num_of_conditions)
+            self.loss_trace_on_validation.append(self.validator_callback())
+            if epoch % 100 == 0:
+                print(
+                    f"[{epoch + 1}] "
+                    f"loss: {self.loss_trace[-1]:.2f} "
+                    f"loss_validation: {self.loss_trace_on_validation[-1]:.2f}"
+                )    
+
+    def plot_loss(self):
+        fig, axs = plt.subplots(2, 1)
+        axs[0].plot(self.loss_trace)
+        axs[0].set_ylabel('loss_trace [N]')
+        axs[1].plot(self.loss_trace_on_validation)
+        axs[1].set_ylabel('loss_trace_on_validation [N]')
+        axs[1].set_xlabel('epoch')

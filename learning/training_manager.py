@@ -55,7 +55,7 @@ class DiamlDataFactoryAdapter(Adapter):
     def set_up(self, sample_data_menu: list, input_label_map_file: str) -> None:
         """The sample data menu is a subset of training data to inspect number of conditions and do normalization"""
         print("Setting up data factory...")
-        self.implementation = data_factory.DataFactory(
+        self.implementation = data_factory.DiamlDataFactory(
             input_label_map_file
         )
         self.implementation.set_num_of_conditions(sample_data_menu)
@@ -78,7 +78,7 @@ class DiamlDataFactoryAdapter(Adapter):
 class DiamlModelFactoryAdapter(Adapter):
     def set_up(self, artifacts: DataFactoryArtifacts) -> None:
         print("Setting up model factory...")
-        self.implementation = model.ModelFactory(
+        self.implementation = model.DiamlModelFactory(
             artifacts.num_of_conditions,
             artifacts.dim_of_input,
             artifacts.input_mean_vector,
@@ -122,18 +122,18 @@ class DiamlModelSaver:
         self.input_label_map = artifacts_data.input_label_map
 
     def save_model(self, name) -> None:
-        model.save_model(name, self.phi_net, self.h_net, self.model_factory_config, self.input_label_map)
+        model.save_diaml_model(name, self.phi_net, self.h_net, self.model_factory_config, self.input_label_map)
 
 class DiamlModelLoader:
     def generate_artifacts(self, name) -> ModelFactoryArtifacts:
         artifacts = ModelFactoryArtifacts()
-        artifacts.phi_net, artifacts.h_net = model.load_model(name)
+        artifacts.phi_net, artifacts.h_net = model.load_diaml_model(name)
         return artifacts
         
 class DiamlValidatorAdapter(Adapter):
     def set_up(self, artifacts_data: DataFactoryArtifacts, artifacts_model: ModelFactoryArtifacts) -> None:
         print("Setting up validator...")
-        self.validator_instance = validator.Evaluator()
+        self.validator_instance = validator.DiamlEvaluator()
         self.validator_instance.load_model(artifacts_model.phi_net, artifacts_model.h_net)
         self.validator_instance.load_dataset(artifacts_data.datasets)
 
@@ -144,6 +144,99 @@ class DiamlValidatorAdapter(Adapter):
     
     def test_model(self) -> None:
         self.validator_instance.test_model()
+
+class SimpleDataFactoryAdapter(Adapter):
+    def set_up(self, sample_data_menu: list, input_label_map_file: str) -> None:
+        """The sample data menu is a subset of training data to inspect number of conditions and do normalization"""
+        print("Setting up data factory...")
+        self.implementation = data_factory.SimpleDataFactory(
+            input_label_map_file
+        )
+        self.implementation.make_normalization_params(sample_data_menu)
+
+    def generate_artifacts(self, data_menu: list, can_inspect_data: bool=False) -> DataFactoryArtifacts:
+        artifacts = DataFactoryArtifacts()
+        artifacts.datasets = self.implementation.prepare_datasets(data_menu, can_inspect_data)
+        artifacts.loaderset = self.implementation.prepare_loaderset(artifacts.datasets)
+        artifacts.dim_of_input = len(self.implementation.input_headers)
+        artifacts.dim_of_label = len(self.implementation.label_headers)
+        artifacts.input_mean_vector = self.implementation.input_mean_vector
+        artifacts.input_scale_vector = self.implementation.input_scale_vector
+        artifacts.label_mean_vector = self.implementation.label_mean_vector
+        artifacts.label_scale_vector = self.implementation.label_scale_vector
+        artifacts.input_label_map = self.implementation.input_label_map
+        return artifacts
+
+
+class SimpleModelFactoryAdapter(Adapter):
+    def set_up(self, artifacts: DataFactoryArtifacts) -> None:
+        print("Setting up model factory...")
+        self.implementation = model.SimpleNetFactory(
+            artifacts.dim_of_input,
+            artifacts.dim_of_label,
+            artifacts.input_mean_vector,
+            artifacts.input_scale_vector,
+            artifacts.label_mean_vector,
+            artifacts.label_scale_vector,
+        )
+
+    def generate_artifacts(self) -> ModelFactoryArtifacts:
+        artifacts = ModelFactoryArtifacts()
+        artifacts.simple_net = self.implementation.generate_nets()
+        artifacts.config = self.implementation.generate_self_config()
+        return artifacts
+
+class SimpleTrainerAdapter(Adapter):
+    def set_up(self, artifacts_data: DataFactoryArtifacts, artifacts_model: ModelFactoryArtifacts, artifacts_validator: ValidatorArtifacts) -> None:
+        print("Setting up trainer...")
+        self.implementation = trainer.SimpleTrainer(
+            artifacts_model.simple_net,
+            artifacts_data.loaderset,
+            artifacts_data.dim_of_label,
+            artifacts_validator.in_run_validate
+        )
+
+    def train(self):
+        self.implementation.train_model()
+        self.implementation.plot_loss()
+
+    def generate_results(self):
+        """Trigger to train the model"""
+        self.implementation.plot_loss()
+
+class SimpleModelSaver:
+    def set_up(self, artifacts_model: ModelFactoryArtifacts, artifacts_data: DataFactoryArtifacts) -> None:
+        self.simple_net = artifacts_model.simple_net
+        self.model_factory_config = artifacts_model.config
+        self.input_label_map = artifacts_data.input_label_map
+
+    def save_model(self, name) -> None:
+        model.save_simple_model(name, self.simple_net, self.model_factory_config, self.input_label_map)
+
+class SimpleModelLoader:
+    def generate_artifacts(self, name) -> ModelFactoryArtifacts:
+        artifacts = ModelFactoryArtifacts()
+        artifacts.simple_net = model.load_simple_model(name)
+        return artifacts
+
+        
+class SimpleValidatorAdapter(Adapter):
+    def set_up(self, artifacts_data: DataFactoryArtifacts, artifacts_model: ModelFactoryArtifacts) -> None:
+        print("Setting up validator...")
+        self.validator_instance = validator.SimpleEvaluator()
+        self.validator_instance.load_model(artifacts_model.simple_net)
+        self.validator_instance.load_dataset(artifacts_data.datasets)
+
+    def generate_artifacts(self) -> ValidatorArtifacts:
+        artifacts = ValidatorArtifacts()
+        artifacts.in_run_validate = self.validator_instance.callback_validation
+        return artifacts
+    
+    def test_model(self) -> None:
+        self.validator_instance.test_model()
+
+
+
 
 class TrainingPipeline:
     def __init__(self, data_adapter: Adapter, model_adapter: Adapter, trainer_adapter: Adapter, validator_adapter: Adapter, model_saver) -> None:
@@ -206,7 +299,7 @@ class TestManager:
         self.set_up_tester()
 
     def set_up_data_factory(self, data_menu, input_label_map_file: str) -> None:
-        self.data_factory_instance = data_factory.DataFactory(
+        self.data_factory_instance = data_factory.DiamlDataFactory(
             input_label_map_file
         )
         self.data_factory_instance.make_normalization_params(data_menu)
@@ -215,7 +308,7 @@ class TestManager:
         self.num_of_conditions = self.data_factory_instance.num_of_conditions # assume each data file has a unique condition
 
     def set_up_tester(self) -> None:
-        self.tester_instance = validator.Evaluator()
+        self.tester_instance = validator.DiamlEvaluator()
 
     def test(self, phi_net: model.MultilayerNet, h_net: model.MultilayerNet, data_menu_validation: list) -> None:
         datasets = self.data_factory_instance.prepare_datasets(data_menu_validation, False)        
@@ -245,6 +338,14 @@ class PipelineFactory:
                 DiamlValidatorAdapter(),
                 DiamlModelSaver()
             )
+        else:
+            return TrainingPipeline(
+                SimpleDataFactoryAdapter(),
+                SimpleModelFactoryAdapter(),
+                SimpleTrainerAdapter(),
+                SimpleValidatorAdapter(),
+                SimpleModelSaver()
+            )
 
     def make_test_pipeline(self) -> TestPipeline:
         """API for users to get the testing pipeline, the main job is to select the right adapters"""
@@ -254,28 +355,9 @@ class PipelineFactory:
                 DiamlValidatorAdapter(),
                 DiamlModelLoader()
             )
-
-def load_model(name) -> tuple[model.PhiNet, model.HNet, dict]:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(current_dir, "model", name + ".pth")       
-    package = torch.load(file_path)
-
-    # recreate the model factory instance that generated the trained model
-    model_factory_instance = model.ModelFactory(
-        package["model_factory_init_args"]["num_of_conditions"],
-        package["model_factory_init_args"]["dim_of_input"],
-        package["model_factory_init_args"]["input_mean"],
-        package["model_factory_init_args"]["input_scale"],
-        package["model_factory_init_args"]["label_mean"],
-        package["model_factory_init_args"]["label_scale"],
-        customized_config=package["model_factory_init_args"]["customized_config"]
-    )
-    phi, h = model_factory_instance.generate_nets()
-    phi.load_state_dict(package["phi"])
-    phi.eval()  # set to eval mode
-    h.load_state_dict(package["h"])
-    h.eval()
-    print("phi net input output fields:")
-    for key, value in package["phi_net_io_fields"].items():
-        print(key, value)
-    return phi, h
+        else:
+            return TestPipeline(
+                SimpleDataFactoryAdapter(),
+                SimpleValidatorAdapter(),
+                SimpleModelLoader()
+            )

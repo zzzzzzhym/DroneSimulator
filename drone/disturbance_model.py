@@ -175,6 +175,8 @@ class WindEffectNearWall(DisturbanceForce):
         self.f_propeller = np.zeros(3)  # force on propeller in FLU inertial frame
         self.t_propeller = np.zeros(3)  # force on propeller in FLU inertial frame
         self.f_body = np.zeros(3)  # force on drone body in FLU inertial frame
+        self.is_sinusoidal_wind = False
+        print("is_sinusoidal_wind: ", self.is_sinusoidal_wind)
         
     def generate_sinusoidal_wind(self, t: float) -> None:
         self.u_free[0] = self.u_free_const[0] + 5.0*np.sin(t) # Neural Fly test condition
@@ -185,7 +187,8 @@ class WindEffectNearWall(DisturbanceForce):
         Args:
             rotors (_type_): _description_
         """
-        # self.generate_sinusoidal_wind(t)
+        if self.is_sinusoidal_wind:
+            self.generate_sinusoidal_wind(t)
         forces = []
         torques = []
         induced_flows = []
@@ -214,7 +217,7 @@ class WindEffectNearWall(DisturbanceForce):
         self.f_body = self.get_disturbance_on_drone_body(state)  # add the air drag force on the drone body to the propeller force
         # self.blend_white_noise()  # add white noise to the force and torque
 
-        self.f_explicit = self.f_propeller + self.f_body*0.0  # add the force on drone body to the propeller force
+        self.f_explicit = self.f_propeller + self.f_body*1.0  # add the force on drone body to the propeller force
         self.t_explicit = self.t_propeller
 
 
@@ -238,7 +241,7 @@ class WindEffectNearWall(DisturbanceForce):
     def step_delayed_rotation_speed(self, rotor_set: rotor.RotorSet) -> None:
         """This function low pass filter the rotation speed
         """
-        alpha = 0.0 # amount of delay
+        alpha = 0.95 # amount of delay
         if self.delayed_rotor_set_speed is None:
             self.delayed_rotor_set_speed = []
             for rotor in rotor_set.rotors:
