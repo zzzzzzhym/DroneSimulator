@@ -8,6 +8,7 @@ import rotor
 import utils
 import inflow_model.propeller_lookup_table as propeller_lookup_table
 import flow_pass_object.flow_pass_flat_plate as flow_pass_flat_plate
+import disturbance_model_helper
 
 class DisturbanceForce:
     """Generate a force in inertial frame
@@ -251,19 +252,92 @@ class WindEffectNearWall(DisturbanceForce):
                 self.delayed_rotor_set_speed[i] = (1.0 - alpha) * rotor.rotation_speed + alpha * self.delayed_rotor_set_speed[i]
 
 
-class AggregatedDisturbanceForce(DisturbanceForce):
-    """This class is used to aggregate multiple disturbance forces. It is not a disturbance force itself.
+class WallContact(DisturbanceForce):
+    """This class is used to simulate the contact force when the drone's end effector touches a wall.
+    Only assume the wall provides a constant normal force and friction force.
     """
-    def __init__(self, wind_effect_disturbance: WindEffectNearWall, air_drag: AirDrag) -> None:
+    def __init__(self, wall: disturbance_model_helper.VerticalWall=disturbance_model_helper.VerticalWall()) -> None:
         super().__init__()
-        self.wind_effect_disturbance = wind_effect_disturbance
+        self.end_sponge = params.EndEffector()
+        self.wall = wall
+        # the following is mocking wall effect, need to refactor to avoid this 
+        self.delayed_rotor_set_speed = [0, 0, 0, 0]  # only works for wind near wall disturbance
+        self.f_body = np.zeros(3)  
+        self.f_propeller = np.zeros(3)  
+
+    def get_vertical_distance_wall_to_tip(self, state: dynamics_state.State):
+        """Negative value means penetration into the wall"""
+        tip_position_inertial_frame = state.position + state.pose@utils.FrdFluConverter.flip_vector(self.end_sponge.tip_position)
+        return (tip_position_inertial_frame - self.wall.wall_origin) @ self.wall.wall_norm
+
+    def decompose_contact_point_velocity_on_wall(self, state: dynamics_state.State):
+        v_tip = state.v + np.cross(state.omega, state.pose@utils.FrdFluConverter.flip_vector(self.end_sponge.tip_position))
+        v_normal = v_tip @ self.wall.wall_norm * self.wall.wall_norm
+        v_tangential = v_tip - v_normal
+        return v_tangential, v_normal
+
+    def get_rigid_contact_force(self, p_wall_to_tip, v_contact_point_normal):
+        """Get the rigid contact force when the end effector penetrates the wall
+        """
+        if p_wall_to_tip < -0.1: 
+            warnings.warn("End effector-wall interference to wall detected, penetration depth: "+str(p_wall_to_tip))
+        f_rigid_contact = np.zeros(3)
+        if p_wall_to_tip < 0:  # contact
+            f_rigid_contact = -p_wall_to_tip*self.wall.rigid_contact_stiffness*self.wall.wall_norm - self.wall.rigid_contact_damping*v_contact_point_normal
+
+        return f_rigid_contact
+
+    def get_sponge_deformed_length(self, p_wall_to_tip):
+        length = np.clip(self.end_sponge.sponge_radius - p_wall_to_tip, 0, self.end_sponge.sponge_radius)
+        return length
+
+    def get_sponge_contact_force(self, p_wall_to_tip, v_contact_point_tangential):
+        deformed_length = self.get_sponge_deformed_length(p_wall_to_tip)
+        # normal force from wall
+        f_normal = self.end_sponge.k_sponge * deformed_length * self.wall.wall_norm
+        # friction force from wall
+        v_contact_point_tangential_norm = np.linalg.norm(v_contact_point_tangential)
+        if v_contact_point_tangential_norm < 0.1:   # artificial transient stage for pre-sliding friction
+            f_friction = -self.end_sponge.miu_friction * np.linalg.norm(f_normal) * v_contact_point_tangential
+        else:
+            f_friction = -self.end_sponge.miu_friction * np.linalg.norm(f_normal) * v_contact_point_tangential/v_contact_point_tangential_norm
+        return f_normal + f_friction
 
     def update_explicit_wrench(self, t: float, state: dynamics_state.State, rotor_set: rotor.RotorSet, force_control, torque_control) -> None:
-        self.wind_effect_disturbance.update_explicit_wrench(t, state, rotor_set, force_control, torque_control)
-        
-        self.f_explicit = self.wind_effect_disturbance.f_explicit
-        self.t_explicit = self.wind_effect_disturbance.t_explicit
+        # TODO: consider zero contact force out of wall width range 
+        p_wall_to_tip = self.get_vertical_distance_wall_to_tip(state)
+        v_contact_point_tangential, v_contact_point_normal = self.decompose_contact_point_velocity_on_wall(state)
+        f_rigid_contact = self.get_rigid_contact_force(p_wall_to_tip, v_contact_point_normal)
+        f_sponge_contact = self.get_sponge_contact_force(p_wall_to_tip, v_contact_point_tangential)
+        self.f_explicit = state.pose.T@(f_rigid_contact + f_sponge_contact)  # convert to body frame
+        self.t_explicit = np.cross(utils.FrdFluConverter.flip_vector(self.end_sponge.tip_position), self.f_explicit)  # torque in body frame
+        # debug
+        # print(
+        #     f"p_wall_to_tip: {p_wall_to_tip}, "
+        #     f"f_rigid_contact: {f_rigid_contact}, "
+        #     f"f_sponge_contact: {f_sponge_contact}, "
+        #     f"f_explicit: {self.f_explicit}, "
+        #     f"t_explicit: {self.t_explicit}"
+        # )
 
+class AggregatedDisturbance(DisturbanceForce):
+    """This class is used to aggregate multiple disturbance forces. It is not a disturbance force itself.
+    """
+    def __init__(self, wall_origin=np.array([-0.5, 0, 0]), wall_norm=np.array([1, 0, 0]), wall_length=4.0, u_free=np.array([-5.0, 0.0, 0.0])) -> None:
+        super().__init__()
+        self.wind_effect = WindEffectNearWall(wall_origin, wall_norm, wall_length, u_free)
+        self.wall_contact = WallContact()
+
+    def update_explicit_wrench(self, t: float, state: dynamics_state.State, rotor_set: rotor.RotorSet, force_control, torque_control) -> None:
+        self.wind_effect.update_explicit_wrench(t, state, rotor_set, force_control, torque_control)
+        self.wall_contact.update_explicit_wrench(t, state, rotor_set, force_control, torque_control)
+        
+        self.f_explicit = self.wind_effect.f_explicit + self.wall_contact.f_explicit
+        self.t_explicit = self.wind_effect.t_explicit + self.wall_contact.t_explicit
+
+        self.delayed_rotor_set_speed = self.wind_effect.delayed_rotor_set_speed 
+        self.f_body = self.wind_effect.f_body 
+        self.f_propeller = self.wind_effect.f_propeller 
 
 if __name__ == "__main__":
     wall = WallEffect()

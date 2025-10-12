@@ -193,21 +193,23 @@ class StraightX(TrajectoryReference):
         
 class CircleYZ(TrajectoryReference):
     def step_reference_state(self, t) -> None:
+        amplitude = 0.4
+        frequency = np.pi*0.5
         self.x_d = np.array([0.0,
-                             0.4*np.sin(np.pi*t),
-                             0.4*np.cos(np.pi*t)-0.4])
+                     amplitude * np.sin(frequency * t),
+                     amplitude * np.cos(frequency * t) - amplitude])
         self.v_d = np.array([0.0,
-                             0.4*np.pi*np.cos(np.pi*t),
-                             -0.4*np.pi*np.sin(np.pi*t)])
+                     amplitude * frequency * np.cos(frequency * t),
+                     -amplitude * frequency * np.sin(frequency * t)])
         self.x_d_dot2 = np.array([0.0,
-                             -0.4*(np.pi**2)*np.sin(np.pi*t),
-                             -0.4*(np.pi**2)*np.cos(np.pi*t)])
+                     -amplitude * (frequency ** 2) * np.sin(frequency * t),
+                     -amplitude * (frequency ** 2) * np.cos(frequency * t)])
         self.x_d_dot3 = np.array([0.0,
-                             -0.4*(np.pi**3)*np.cos(np.pi*t),
-                             0.4*(np.pi**3)*np.sin(np.pi*t)])
+                     -amplitude * (frequency ** 3) * np.cos(frequency * t),
+                     amplitude * (frequency ** 3) * np.sin(frequency * t)])
         self.x_d_dot4 = np.array([0.0,
-                             0.4*(np.pi**4)*np.sin(np.pi*t),
-                             0.4*(np.pi**4)*np.cos(np.pi*t)])
+                     amplitude * (frequency ** 4) * np.sin(frequency * t),
+                     amplitude * (frequency ** 4) * np.cos(frequency * t)])
         
 class CircleYZAndSpin(TrajectoryReference):
     def step_reference_state(self, t) -> None:

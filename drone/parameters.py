@@ -55,7 +55,7 @@ class Drone:
         Note that in the paper, thrust of a rotor is positive (f_i > 0) when it is in the negative z axis direction.
 
         Returns:
-            _type_: _description_
+            tuple: (m_thrust_to_wrench, m_wrench_to_thrust)
         """
         m_0 = np.array([1.0, 1.0, 1.0, 1.0])
         unit_thrust = np.array([0, 0, -1.0])    # thrust is in negative z axis
@@ -123,6 +123,18 @@ class TrackingOnSE3(Drone):
                          is_ccw_blade=is_ccw_blade)
         self.f_motor_max = 50.0  # maximum possible thrust per motor [N] Thrust per motor: 200 - 800 grams for small drones
         self.f_motor_min = 0.1   # minimum possible thrust per motor [N]
+
+class EndEffector:
+    """End effector parameters
+    Assume a fixed rod with a spherical sponge at the tip, only consider 1D linear deformation without damping effect
+    Center-tip length refer to Guo, Xiaofeng, et al. "Flying calligrapher: Contact-aware motion and force planning and control for aerial manipulation." IEEE Robotics and Automation Letters (2024).
+    """
+    def __init__(self):
+        self.tip_position = np.array([-0.5, 0.0, 0.0])  # position of end effector in body frame FLU[m]
+        self.sponge_radius = 0.1  # radius of the spherical sponge [m]
+        self.k_sponge = 100*0.1  # spring constant of the sponge [N/m]
+        self.miu_friction = 0.4  # friction coefficient between sponge and wall [unitless]
+
 
 class Control:
     """Control parameters"""
