@@ -188,7 +188,6 @@ class FittingFactory(DataFactory):
         datasets = []
         for file in data_menu:
             file_path = DataFactory.get_path_to_data_file(file)
-            # data = pd.read_csv(file_path)
             data = DataFactory.make_data_frame_from_csv(file)
             dataset = FittingDataset(data, file_path)
             datasets.append(dataset)

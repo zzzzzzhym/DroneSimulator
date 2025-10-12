@@ -51,11 +51,15 @@ f_disturb_est:
   can_save_to_file: false
 f_disturb_est_base:
   can_save_to_file: false
+f_disturb_est_bemt:
+  can_save_to_file: false
 torque_disturb:
   can_save_to_file: true    
 torque_disturb_est:
   can_save_to_file: false
 torque_disturb_est_base:
+  can_save_to_file: false
+torque_disturb_est_bemt:
   can_save_to_file: false
 omega:
   can_save_to_file: true  

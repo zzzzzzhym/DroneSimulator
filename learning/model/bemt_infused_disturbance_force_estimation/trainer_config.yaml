@@ -19,7 +19,7 @@ num_epochs: 500  # though ending at 1000, the paper actually choose the best mod
 alpha: 0.1    # weight of cross entropy loss
 warmup_epoch: 1  # number of warmup steps before introducing the cross entropy loss
 gamma: 10.0    # normalization of a
-spectral_norm: 2.0    # normalization
+spectral_norm: 1.0    # normalization specialized for simple net
 is_dynamic_environment: True    # flag to adapt to environment with matrix a, False equivalent to a = ones(size)
 use_greedy_residual_fitting: False
 

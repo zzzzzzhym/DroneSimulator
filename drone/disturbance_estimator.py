@@ -121,7 +121,7 @@ class DisturbanceEstimator:
         self.phi.eval()
         self.num_of_kernals = self.phi.dim_of_output
         self.dof_of_disturbance = 6
-        self.dt = 0.01
+        self.dt = dt
         self.f_x = UnitDisturbance(self.num_of_kernals, self.dt, self.phi.output_mean[0].numpy(), self.phi.output_scale[0].numpy())
         self.f_y = UnitDisturbance(self.num_of_kernals, self.dt, self.phi.output_mean[1].numpy(), self.phi.output_scale[1].numpy())
         self.f_z = UnitDisturbance(self.num_of_kernals, self.dt, self.phi.output_mean[2].numpy(), self.phi.output_scale[2].numpy())
@@ -130,12 +130,12 @@ class DisturbanceEstimator:
         self.tq_z = UnitDisturbance(self.num_of_kernals, self.dt)
 
     def update_kernel(self, position: np.ndarray, v: np.ndarray, q: np.ndarray, omega: np.ndarray, f: np.ndarray, tq: np.ndarray, rotor_spd: np.ndarray) -> np.ndarray:
-        nn_input = np.hstack([position, v, q, omega, f, tq, rotor_spd])
+        nn_input = np.hstack([position, q, v, omega, f, tq, rotor_spd])
         with torch.no_grad():
             kernel = self.phi(torch.from_numpy(nn_input))
         return kernel.numpy()
     
-    def step_disturbance(self,  position: np.array, v: np.ndarray, q: np.ndarray, omega: np.ndarray, f: np.ndarray, tq: np.ndarray, rotor_spd: np.ndarray, measured_disturbance: np.ndarray, tracking_error: np.ndarray) -> None:
+    def step_disturbance(self, position: np.array, v: np.ndarray, q: np.ndarray, omega: np.ndarray, f: np.ndarray, tq: np.ndarray, rotor_spd: np.ndarray, measured_disturbance: np.ndarray, tracking_error: np.ndarray) -> None:
         self.kernel = self.update_kernel(position, v, q, omega, f, tq, rotor_spd)
         self.f_x.step_estimator(self.kernel, measured_disturbance[0], tracking_error[0])
         self.f_y.step_estimator(self.kernel, measured_disturbance[1], tracking_error[1])
@@ -144,6 +144,52 @@ class DisturbanceEstimator:
         self.tq_y.step_estimator(self.kernel, measured_disturbance[4], tracking_error[4])
         self.tq_z.step_estimator(self.kernel, measured_disturbance[5], tracking_error[5])
 
+    def get_disturbance_force(self) -> np.ndarray:
+        return np.array([self.f_x.disturbance, self.f_y.disturbance, self.f_z.disturbance])
+    
+    def get_disturbance_torque(self) -> np.ndarray:
+        return np.array([self.tq_x.disturbance, self.tq_y.disturbance, self.tq_z.disturbance])
+
+
+class BemtFittedDisturbanceEstimatorV0(DisturbanceEstimator):
+    def __init__(self, model_name: str, dt: float) -> None:
+        self.nn = model.load_diaml_model(model_name)
+        self.nn.eval()
+        self.num_of_kernals = 2
+        self.dof_of_disturbance = 6
+        self.dt = dt
+        self.f_x = UnitDisturbance(self.num_of_kernals, self.dt, self.nn.output_mean[0].numpy(), self.nn.output_scale[0].numpy())
+        self.f_y = UnitDisturbance(self.num_of_kernals, self.dt, self.nn.output_mean[1].numpy(), self.nn.output_scale[1].numpy())
+        self.f_z = UnitDisturbance(self.num_of_kernals, self.dt, self.nn.output_mean[2].numpy(), self.nn.output_scale[2].numpy())
+        self.tq_x = UnitDisturbance(self.num_of_kernals, self.dt)
+        self.tq_y = UnitDisturbance(self.num_of_kernals, self.dt)
+        self.tq_z = UnitDisturbance(self.num_of_kernals, self.dt)
+
+    def update_kernel(
+        self,
+        v: np.ndarray,
+        q: np.ndarray,
+        omega: np.ndarray,
+        rotor_0_local_wind_velocity: np.ndarray,
+        rotor_1_local_wind_velocity: np.ndarray,
+        rotor_2_local_wind_velocity: np.ndarray,
+        rotor_3_local_wind_velocity: np.ndarray,
+        rotor_spd: np.ndarray
+    ) -> np.ndarray:
+        nn_input = np.hstack([
+            q,
+            v,
+            omega,
+            rotor_0_local_wind_velocity,
+            rotor_1_local_wind_velocity,
+            rotor_2_local_wind_velocity,
+            rotor_3_local_wind_velocity,
+            rotor_spd
+        ])
+        with torch.no_grad():
+            kernel = self.nn(torch.from_numpy(nn_input))
+        return np.hstack([kernel.numpy(), 1.0])  # add bias term to capture any unmodeled disturbance
+    
 
 # make another baseline disturbance estimator that don't take in the kernel
 class BaselineDisturbanceEstimator:
@@ -169,7 +215,101 @@ class BaselineDisturbanceEstimator:
         self.tq_y.step_estimator(np.array([[1]]), measured_disturbance[4], tracking_error[4])
         self.tq_z.step_estimator(np.array([[1]]), measured_disturbance[5], tracking_error[5])
 
+    def get_disturbance_force(self) -> np.ndarray:
+        return np.array([self.f_x.disturbance, self.f_y.disturbance, self.f_z.disturbance])
+    
+    def get_disturbance_torque(self) -> np.ndarray:
+        return np.array([self.tq_x.disturbance, self.tq_y.disturbance, self.tq_z.disturbance])
 
+    
+class BemtFittedDisturbanceEstimatorV1(BaselineDisturbanceEstimator):
+    def __init__(self, model_name: str, dt: float) -> None:
+        self.nn = model.load_simple_model(model_name)   # TODO: make abstract factory to select the right model factory
+        self.nn.eval()
+        self.dof_of_disturbance = 6
+        self.dt = dt
+        self.f_x = UnitDisturbance(1, self.dt)
+        self.f_y = UnitDisturbance(1, self.dt)
+        self.f_z = UnitDisturbance(1, self.dt)
+        self.tq_x = UnitDisturbance(1, self.dt)
+        self.tq_y = UnitDisturbance(1, self.dt)
+        self.tq_z = UnitDisturbance(1, self.dt)
+
+        # tune down measurement noise to suppress noising simplenet output
+        # self.f_x.r = self.f_x.r*0.1
+        # self.f_y.r = self.f_y.r*0.1
+        # self.f_z.r = self.f_z.r*0.1
+        # self.tq_x.r = self.tq_x.r*0.1
+        # self.tq_y.r = self.tq_y.r*0.1
+        # self.tq_z.r = self.tq_z.r*0.1
+        self.predicted_disturbance = np.zeros(3)
+
+    def predict_disturbance(
+        self,
+        v: np.ndarray,
+        q: np.ndarray,
+        omega: np.ndarray,
+        rotor_0_local_wind_velocity: np.ndarray,
+        rotor_1_local_wind_velocity: np.ndarray,
+        rotor_2_local_wind_velocity: np.ndarray,
+        rotor_3_local_wind_velocity: np.ndarray,
+        rotor_spd: np.ndarray,
+        bemt_predicted_force: np.ndarray,
+        bemt_predicted_torque: np.ndarray
+    ) -> np.ndarray:
+        nn_input = np.hstack([
+            q,
+            v,
+            omega,
+            rotor_0_local_wind_velocity,
+            rotor_1_local_wind_velocity,
+            rotor_2_local_wind_velocity,
+            rotor_3_local_wind_velocity,
+            rotor_spd
+        ])
+        with torch.no_grad():
+            prediction = self.nn(torch.from_numpy(nn_input))
+        return np.hstack([prediction.numpy() + bemt_predicted_force, bemt_predicted_torque])
+
+    def step_disturbance(
+        self,
+        v: np.ndarray,
+        q: np.ndarray,
+        omega: np.ndarray,
+        rotor_0_local_wind_velocity: np.ndarray,
+        rotor_1_local_wind_velocity: np.ndarray,
+        rotor_2_local_wind_velocity: np.ndarray,
+        rotor_3_local_wind_velocity: np.ndarray,
+        rotor_spd: np.ndarray,
+        measured_disturbance: np.ndarray,
+        tracking_error: np.ndarray,
+        bemt_predicted_force: np.ndarray,
+        bemt_predicted_torque: np.ndarray
+    ) -> None:
+        self.predicted_disturbance = self.predict_disturbance(
+            v,
+            q,
+            omega,
+            rotor_0_local_wind_velocity,
+            rotor_1_local_wind_velocity,
+            rotor_2_local_wind_velocity,
+            rotor_3_local_wind_velocity,
+            rotor_spd,
+            bemt_predicted_force,
+            bemt_predicted_torque
+        )
+        self.f_x.step_estimator(np.array([[1]]), measured_disturbance[0] - self.predicted_disturbance[0], tracking_error[0])
+        self.f_y.step_estimator(np.array([[1]]), measured_disturbance[1] - self.predicted_disturbance[1], tracking_error[1])
+        self.f_z.step_estimator(np.array([[1]]), measured_disturbance[2] - self.predicted_disturbance[2], tracking_error[2])
+        self.tq_x.step_estimator(np.array([[1]]), measured_disturbance[3] - self.predicted_disturbance[3], tracking_error[3])
+        self.tq_y.step_estimator(np.array([[1]]), measured_disturbance[4] - self.predicted_disturbance[4], tracking_error[4])
+        self.tq_z.step_estimator(np.array([[1]]), measured_disturbance[5] - self.predicted_disturbance[5], tracking_error[5])
+
+    def get_disturbance_force(self) -> np.ndarray:
+        return np.array([self.f_x.disturbance, self.f_y.disturbance, self.f_z.disturbance]) + self.predicted_disturbance[0:3]
+    
+    def get_disturbance_torque(self) -> np.ndarray:
+        return np.array([self.tq_x.disturbance, self.tq_y.disturbance, self.tq_z.disturbance]) + self.predicted_disturbance[3:6]
 
 if __name__ == "__main__":
     y = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])

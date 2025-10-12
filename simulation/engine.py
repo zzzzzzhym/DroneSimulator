@@ -82,10 +82,12 @@ class Engine:
             logger.buffer["f_disturb"].append(self.scenario.dynamics.f_disturb)
             logger.buffer["f_disturb_est"].append(self.scenario.controller.f_disturb)
             logger.buffer["f_disturb_est_base"].append(self.scenario.controller.f_disturb_base)
+            logger.buffer["f_disturb_est_bemt"].append(self.scenario.controller.f_disturb_bemt)
             logger.buffer["f_disturb_sensed_raw"].append(self.scenario.controller.f_disturb_sensed_raw)
             logger.buffer["torque_disturb"].append(self.scenario.dynamics.torque_disturb)
             logger.buffer["torque_disturb_est"].append(self.scenario.controller.torque_disturb)
             logger.buffer["torque_disturb_est_base"].append(self.scenario.controller.torque_disturb_base)
+            logger.buffer["torque_disturb_est_bemt"].append(self.scenario.controller.torque_disturb_bemt)
             logger.buffer["omega"].append(self.scenario.dynamics.state.pose@self.scenario.dynamics.state.omega)
             logger.buffer["omega_dot"].append(self.scenario.dynamics.state.pose@self.scenario.dynamics.omega_dot)
             logger.buffer["omega_desired"].append(self.scenario.controller.omega_desired)
@@ -113,8 +115,8 @@ class Engine:
             logger.buffer["rotor_2_velocity"].append(self.scenario.dynamics.rotors.rotors[2].velocity_inertial_frame)
             logger.buffer["rotor_3_velocity"].append(self.scenario.dynamics.rotors.rotors[3].velocity_inertial_frame)
             logger.buffer["b_1d"].append(self.scenario.trajectory.b_1d)
-            logger.buffer["f_propeller"].append(self.scenario.dynamics.disturbance.f_propeller)
-            logger.buffer["f_body"].append(self.scenario.dynamics.disturbance.f_body)
+            logger.buffer["f_propeller"].append(self.scenario.dynamics.disturbance.f_propeller) # only works for wind near wall disturbance
+            logger.buffer["f_body"].append(self.scenario.dynamics.disturbance.f_body) # only works for wind near wall disturbance
             logger.buffer["rotor_0_local_wind_velocity"].append(self.scenario.dynamics.rotors.rotors[0].local_wind_velocity)
             logger.buffer["rotor_1_local_wind_velocity"].append(self.scenario.dynamics.rotors.rotors[1].local_wind_velocity)
             logger.buffer["rotor_2_local_wind_velocity"].append(self.scenario.dynamics.rotors.rotors[2].local_wind_velocity)

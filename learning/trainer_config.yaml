@@ -22,3 +22,5 @@ gamma: 10.0    # normalization of a
 spectral_norm: 2.0    # normalization
 is_dynamic_environment: True    # flag to adapt to environment with matrix a, False equivalent to a = ones(size)
 use_greedy_residual_fitting: False
+
+learning_rate: 0.0005
