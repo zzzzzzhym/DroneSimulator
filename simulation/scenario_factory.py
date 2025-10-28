@@ -5,6 +5,7 @@ import drone.controller
 import drone.propeller
 import drone.disturbance_model
 import drone.parameters
+import drone.sensor
 import scenario
 
 class Factory:
@@ -30,6 +31,7 @@ class Factory:
             dt_dynamics)
         product.controller = Factory.make_controller_assembly(drone_params)
         product.trajectory = trajectory
+        product.sensor = drone.sensor.Sensor()  # can pass from input to customize different sensor model in the future
         return product
 
     @staticmethod

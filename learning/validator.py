@@ -287,7 +287,7 @@ class SimpleEvaluator(Evaluator):
     
     def plot_nn_output(self, out: torch.Tensor):
         dim = out.shape[-1]
-        fig, axs = plt.subplots(dim, 1)
+        fig, axs = plt.subplots(dim, 1, sharex=True)
         for i in range(dim):
             if dim == 1:
                 ax = axs
@@ -303,7 +303,7 @@ class SimpleEvaluator(Evaluator):
         # check dimensions
         dim = groundtruth.shape[-1]
 
-        fig, axs = plt.subplots(3, 2, figsize=(10, 6))
+        fig, axs = plt.subplots(3, 2, figsize=(10, 6), sharex=True)
 
         fig.suptitle(f"{title}", fontsize=12)
 

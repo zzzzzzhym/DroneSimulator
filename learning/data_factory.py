@@ -116,11 +116,13 @@ class FittingDataset:
         self.rotor_2_f_rotor_inertial_frame = np.array(df["rotor_2_f_rotor_inertial_frame"].to_list())
         self.rotor_3_f_rotor_inertial_frame = np.array(df["rotor_3_f_rotor_inertial_frame"].to_list())
 
-        self.f_disturb = np.array(df["f_disturb"].to_list())
-        self.torque_disturb = np.array(df["torque_disturb"].to_list())
-        self.dv = np.array(df["dv"].to_list())
-        self.omega = np.array(df["omega"].to_list())
-        self.omega_dot = np.array(df["omega_dot"].to_list())
+        # self.dv = np.array(df["dv"].to_list())    # ground truth data
+        # self.omega = np.array(df["omega"].to_list())  # ground truth data
+        self.dv = np.array(df["sensed_dv"].to_list())
+        self.omega = np.array(df["sensed_omega"].to_list())
+        # self.omega_dot = np.array(df["omega_dot"].to_list())
+        # self.f_disturb = np.array(df["f_disturb"].to_list())
+        # self.torque_disturb = np.array(df["torque_disturb"].to_list())
 
         self.f_residual = None
 

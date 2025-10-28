@@ -116,7 +116,7 @@ torque_coriolis:
 torque_feedforward:
   can_save_to_file: false
 f_disturb_sensed_raw:
-  can_save_to_file: false
+  can_save_to_file: true
 rotor_0_rotation_spd_delayed:
   can_save_to_file: false
 rotor_1_rotation_spd_delayed:
@@ -146,4 +146,8 @@ rotor_2_f_rotor_inertial_frame:
 rotor_3_f_rotor_inertial_frame:
   can_save_to_file: true
 shared_r_disk:
+  can_save_to_file: true
+sensed_dv:
+  can_save_to_file: true
+sensed_omega:
   can_save_to_file: true
