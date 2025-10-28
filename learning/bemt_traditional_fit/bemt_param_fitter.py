@@ -67,27 +67,40 @@ class BemtParamFitter:
             "f_inertial_frame_frd": []
         }
 
-    def make_lookup_table(self, fitted_params):
+    def make_lookup_table(self, fitted_params, table_name: str):
         blade = inflow_model.blade_params.APC_8x6()
         blade.cl_1, blade.cl_2, blade.cd, blade.alpha_0 = fitted_params  # fitted parameters
-        PropellerLookupTable.Maker.make_propeller_lookup_table("apc_8x6_fitted", blade)
+        print(
+            "Making lookup table with parameters:\n"
+            f"cl_1 = {blade.cl_1}\n"
+            f"cl_2 = {blade.cl_2}\n"
+            f"cd = {blade.cd}\n"
+            f"alpha_0 = blade.alpha_0 "
+        )
+        PropellerLookupTable.Maker.make_propeller_lookup_table(table_name, blade)
 
     def adjust_resolution(self, is_fine_tune):
         """When doing coarse search for optimization, sparse sample can save computation time. In other cases, dense sample is preferred."""
         if is_fine_tune:
-            # self.sample_distance = 20
-            # self.horizontal_weight = 1.0
-            # num_of_elements = 20
-            # num_of_rotation_segments = 18
-            self.sample_distance = 500
+            self.sample_distance = 20
             self.horizontal_weight = 1.0
-            num_of_elements = 100
-            num_of_rotation_segments = 90
+            num_of_elements = 20
+            num_of_rotation_segments = 18
+            # self.sample_distance = 500
+            # self.horizontal_weight = 1.0
+            # num_of_elements = 100
+            # num_of_rotation_segments = 90
         else:
             self.sample_distance = 100
             self.horizontal_weight = 100        
             num_of_elements = 5
             num_of_rotation_segments = 6
+        print(
+            f"Sample distance: {self.sample_distance}, "
+            f"Horizontal weight: {self.horizontal_weight:.3f}, "
+            f"Num of elements: {num_of_elements}, "
+            f"Num of rotation segments: {num_of_rotation_segments}"
+        )
         self.bet_instance.set_integration_resolution(num_of_elements, num_of_rotation_segments)
 
     def compute_total_force_inertial_frame_frd(self, dataset: data_factory.FittingDataset, i: int):
@@ -256,9 +269,9 @@ class BemtParamFitter:
         # Define the bounds for each parameter
         bounds = [(2.0, 10.0), (0.0, 5.0), (0.0, 5.0), (np.radians(10), np.radians(40))]
         if is_fine_tune:
-            maxiter = 50
-        else:
             maxiter = 200
+        else:
+            maxiter = 50
         trace = []
         step_counter = {"count": 0}  # mutable so it can persist across callback calls
 
@@ -272,7 +285,7 @@ class BemtParamFitter:
         result = minimize(
             self.get_loss,
             initial_guess,
-            args=(datasets, None, is_fine_tune),
+            args=(datasets),  # args=(datasets, None, is_fine_tune),
             bounds=bounds,
             callback=record_and_print,
             method='Nelder-Mead',

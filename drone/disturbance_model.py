@@ -339,8 +339,3 @@ class AggregatedDisturbance(DisturbanceForce):
         self.f_body = self.wind_effect.f_body 
         self.f_propeller = self.wind_effect.f_propeller 
 
-if __name__ == "__main__":
-    wall = WallEffect()
-    wall.update_explicit_wrench(0.0, dynamics_state.State(), rotor_spd=2000.0/60)
-    print(wall.f_explicit)
-    print(wall.t_explicit)
