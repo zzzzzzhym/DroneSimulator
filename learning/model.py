@@ -30,7 +30,7 @@ class MultilayerNet(nn.Module):
     def forward(self, x):
         for layer in self.layers[:-1]:
             x = F.relu(layer(x))
-        x = self.layers[-1](x)
+        x = self.layers[-1](x)  # relu can only range [0, inf], last layer has no relu to prevent limited range
         return x 
 
 class PhiNet(MultilayerNet):
@@ -66,32 +66,30 @@ class HNet(MultilayerNet):
     """Follow NeuroFly Nomenclature"""
     def __init__(self, dim_of_input, dim_of_output, dim_of_layers: list):
         super().__init__(dim_of_input, dim_of_output, dim_of_layers, can_append_bias=False)        
-    
-class SimpleNet(MultilayerNet):
+
+
+class SimpleNet(nn.Module):
     """A simple feedforward network without normalization or bias append"""
-    def __init__(self, dim_of_input, dim_of_output, dim_of_layers: list, input_mean, input_scale, output_mean, output_scale):
-        super().__init__(dim_of_input, dim_of_output, dim_of_layers, can_append_bias=False)
+    def __init__(self, dim_of_input, dim_of_output, dim_of_layers: list, dim_of_shared_features, head_layer_dimensions: list, input_mean, input_scale, output_mean, output_scale):
+        super().__init__()
         # Normalization: use register_buffer to avoid being changed by optimizer
         self.register_buffer("input_mean", torch.tensor(input_mean, dtype=torch.float32))
         self.register_buffer("input_scale", torch.tensor(input_scale, dtype=torch.float32))
         self.register_buffer("output_mean", torch.tensor(output_mean, dtype=torch.float32))
         self.register_buffer("output_scale", torch.tensor(output_scale, dtype=torch.float32))
 
-    # def forward(self, x: torch.Tensor) -> torch.Tensor:
-    #     # Normalize input, assuming x is raw input <- should not do that. dataset is already normalized. Todo: check inference implementation
-    #     x = (x - self.input_mean) * self.input_scale
+        self.shared_backbone = MultilayerNet(dim_of_input, dim_of_shared_features, dim_of_layers, can_append_bias=False)
 
-    #     for layer in self.layers[:-1]:
-    #         x = F.relu(layer(x))
-    #     x = self.layers[-1](x)
-    #     if len(x.shape) == 1:
-    #         # single input (batch size == 1)
-    #         one = torch.ones(1, device=x.device)
-    #         return torch.cat([one, x])
-    #     else:
-    #         # batch input for training (assuming that x is at most 2D)
-    #         ones = torch.ones([x.shape[0], 1], device=x.device)
-    #         return torch.cat([ones, x], dim=-1)
+        self.heads = nn.ModuleList()
+        for _ in range(dim_of_output):
+            net = MultilayerNet(dim_of_shared_features, 1, head_layer_dimensions, can_append_bias=False)
+            self.heads.append(net)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        shared_net_output = self.shared_backbone(x) 
+        head_outputs = [head(shared_net_output) for head in self.heads]
+        output = torch.cat(head_outputs, dim=-1)    # concatenate head outputs to get final output
+        return output  # scale up to match the range of disturbance forces
 
 
 class DiamlModelFactory:
@@ -206,6 +204,8 @@ class SimpleNetFactory:
             self.dim_of_input,
             self.dim_of_label,
             self.config["SimpleNet"]["hidden_layer_dimensions"],
+            self.config["SimpleNet"]["dim_of_shared_features"],
+            self.config["SimpleNet"]["head_layer_dimensions"],
             self.input_mean,
             self.input_scale,
             self.label_mean,
