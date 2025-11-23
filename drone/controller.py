@@ -146,6 +146,14 @@ class DroneController:
         self.torque_disturb_bemt = self.bemt_disturbance_estimator.get_disturbance_torque()
 
     def get_predicted_air_force(self, sensor_data: sensor.SensorData):
+        """Get predicted air force and torque on drone from propeller lookup table.
+
+        Args:
+            sensor_data (sensor.SensorData): Current sensor measurements including rotor states
+
+        Returns:
+            tuple: (f_propeller, t_propeller) - Predicted force and torque in body frame
+        """
         forces = []
         torques = []
         for rotor in sensor_data.rotors.rotors:
@@ -182,13 +190,6 @@ class DroneController:
             + utils.get_hat_map(sensor_data.omega) @ self.params.inertia @ sensor_data.omega
             - self.torque
         )
-
-        # # Add noise
-        # f_noise_std = np.array([0.1, 0.1, 0.1])*2
-        # tq_noise_std = np.array([0.01, 0.01, 0.01])
-        # f_noise = np.random.normal(0, f_noise_std)
-        # tq_noise = np.random.normal(0, tq_noise_std)        
-        # return np.hstack((f_disturb + f_noise, tq_disturbance + tq_noise))
     
         return np.hstack((f_disturb, tq_disturbance))
 
