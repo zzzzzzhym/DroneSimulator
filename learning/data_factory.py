@@ -1,5 +1,4 @@
 from dataclasses import field
-from email import header
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -10,7 +9,7 @@ import pandas as pd
 from ast import literal_eval
 
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 from torch.utils.data.dataset import random_split
 
 import normalization
@@ -85,6 +84,44 @@ class SimpleDataset(Dataset):
         output = self.output[idx, :]
         sample = {'input': torch.tensor(input), 
                   'output': torch.tensor(output)}
+        return sample
+    
+class RotorNetDataset(Dataset):
+
+    def __init__(self,
+        shared_input: np.ndarray,
+        individual_input: list[np.ndarray],
+        output: np.ndarray,
+        input_mean_vector,
+        input_scale_vector,
+        label_mean_vector,
+        label_scale_vector,
+        source_file: str) -> None:
+        """
+
+        Args:
+            inputs (np.ndarray): velocity (3) + quaternion (4) + input (4) = 11
+            outputs (np.ndarray): disturbance force (3)
+        """
+        self.shared_input = shared_input
+        self.individual_input = individual_input
+        self.output = output
+        self.source_file = source_file
+        self.input_mean_vector = input_mean_vector
+        self.input_scale_vector = input_scale_vector
+        self.label_mean_vector = label_mean_vector
+        self.label_scale_vector = label_scale_vector
+
+    def __len__(self):
+        return len(self.shared_input)
+
+    def __getitem__(self, idx):
+        shared_input = torch.tensor(self.shared_input[idx, :])
+        individual_input = [torch.tensor(each[idx, :]) for each in self.individual_input]
+        output = torch.tensor(self.output[idx, :])
+        sample = {'shared_input': shared_input, 
+                  'individual_input': individual_input,
+                  'output': output}
         return sample
 
 
@@ -214,6 +251,14 @@ class TrainingDataFactory(DataFactory):
 
     @staticmethod
     def extract_header_from_input_label_map(column_names: dict[list]) -> list[str]:
+        """Extract the header names from the input_label_map
+
+        Args:
+            column_names (dict[list]): column_names[name] = None if the column is 1D, otherwise column_names[name] = [0, 1, 2] for a 3D column
+
+        Returns:
+            list[str]: List of header names, with dimension suffixes where applicable
+        """
         headers = []
         for column, dimensions in column_names.items():
             if dimensions is None:
@@ -444,26 +489,8 @@ class DiamlDataFactory(TrainingDataFactory):
         if self.config["can_shuffle"]:
             phi_set, a_set, _ = random_split(training_data, [part_phi, part_a, len(training_data) - part_phi - part_a])
         else:
-            phi_input = training_data.input[:part_phi]
-            phi_output = training_data.output[:part_phi]
-            a_input = training_data.input[part_phi:part_phi + part_a]
-            a_output = training_data.output[part_phi:part_phi + part_a]
-
-            phi_set = DiamlDataset(phi_input, phi_output, 
-                                      training_data.c,
-                                      training_data.input_mean_vector,
-                                      training_data.input_scale_vector,
-                                      training_data.label_mean_vector,
-                                      training_data.label_scale_vector,
-                                      training_data.source_file)
-
-            a_set = DiamlDataset(a_input, a_output, 
-                                    training_data.c,
-                                    training_data.input_mean_vector,
-                                    training_data.input_scale_vector,
-                                    training_data.label_mean_vector,
-                                    training_data.label_scale_vector,
-                                    training_data.source_file)
+            phi_set = Subset(training_data, range(part_phi))
+            a_set = Subset(training_data, range(part_phi, part_phi + part_a))
         phi_loader = torch.utils.data.DataLoader(phi_set, batch_size=self.config["phi_shot"], shuffle=self.config["can_shuffle"])
         a_loader = torch.utils.data.DataLoader(a_set, batch_size=self.config["a_shot"], shuffle=True)
         return phi_loader, a_loader
@@ -517,18 +544,83 @@ class SimpleDataFactory(TrainingDataFactory):
         """Generate a data loader for the dataset"""
         length = int(len(training_data)*self.config["data_usage_ratio"])
         print(f"Using {length} samples from the dataset for training", f"from source file: {training_data.source_file}")
-        dataset = SimpleDataset(training_data.input, 
-                      training_data.output, 
-                      training_data.input_mean_vector,
-                      training_data.input_scale_vector,
-                      training_data.label_mean_vector,
-                      training_data.label_scale_vector,
-                      training_data.source_file)
-
-        loader = torch.utils.data.DataLoader(dataset, batch_size=self.config["simple_shot"], shuffle=self.config["can_shuffle"])
+        subset = Subset(training_data, range(length))   # use only the beginning subset of the data for training
+        loader = torch.utils.data.DataLoader(subset, batch_size=self.config["simple_shot"], shuffle=self.config["can_shuffle"])
         return loader
 
     def prepare_loaderset(self, datasets: list[SimpleDataset]) -> list[DataLoader]:
+        """Generate a list of data loaders"""
+        loaderset = []
+        for data in datasets:
+            single_loader = self.get_data_loaders(data)
+            loaderset.append(single_loader)
+        return loaderset
+
+    def get_data(self, data_menu: list, can_inspect_data: bool=False) -> list[DataLoader]:
+        """Main API of DataFactory"""
+        datasets = self.prepare_datasets(data_menu, can_inspect_data)
+        loaderset = self.prepare_loaderset(datasets)
+        return loaderset
+    
+
+class RotorNetDataFactory(TrainingDataFactory):
+    def __init__(self, input_label_map_file: str) -> None:
+        self.input_label_map = TrainingDataFactory.get_map(input_label_map_file)
+        self.shared_input_headers = TrainingDataFactory.extract_header_from_input_label_map(self.input_label_map["shared_input"])
+        self.individual_input_headers = []
+        for member in self.input_label_map["individual_input"]:
+            self.individual_input_headers.append(TrainingDataFactory.extract_header_from_input_label_map(member))
+
+        self.label_headers = TrainingDataFactory.extract_header_from_input_label_map(self.input_label_map["label"])
+        self.input_normalization, self.label_normalization = self.initialize_normalization_dict()
+        self.normalization_params_file_path = TrainingDataFactory.find_path_to_normalization_params_file(input_label_map_file)
+        self.config = TrainingDataFactory.load_config("data_factory_config.yaml")     
+
+    def convert_sim_to_training_data(self, shared_input_data: np.ndarray, individual_input_data: list[np.ndarray], label_data: np.ndarray, file: str) -> SimpleDataset:
+        # normalize data before putting it into the dataset
+        result = RotorNetDataset(shared_input_data,   # input normalization will be done in the network
+                                 individual_input_data,
+                               (label_data - self.label_mean_vector)*self.label_scale_vector,
+                               self.input_mean_vector,
+                               self.input_scale_vector,
+                               self.label_mean_vector,
+                               self.label_scale_vector,
+                               file)
+        return result
+
+    def load_sim_data(self, file_name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Load the csv file and find the columns of interest."""
+        input_columns, label_columns = TrainingDataFactory.find_input_label_column(self.input_label_map)
+        df = DataFactory.make_data_frame_from_csv(file_name, input_columns + label_columns)
+        shared_input_data = TrainingDataFactory.extract_data_from_data_frame(self.input_label_map["shared_input"], df)
+        individual_input_data = []
+        for member in self.input_label_map["individual_input"]:
+            individual_input_data.append(TrainingDataFactory.extract_data_from_data_frame(member, df))
+        label_data = TrainingDataFactory.extract_data_from_data_frame(self.input_label_map["label"], df)
+        return shared_input_data, individual_input_data, label_data
+
+    def prepare_datasets(self, data_menu: list, can_inspect_data: bool=False) -> list[RotorNetDataset]:
+        """Prepare the datasets from the data menu
+        Each file in the data menu is a different condition, the length of the dataset is the number of conditions"""
+        datasets = []
+        for file in data_menu:
+            shared_input_data, individual_input_data, label_data = self.load_sim_data(file)
+            if can_inspect_data:
+                TrainingDataFactory.plot_dataset_distribution_grid(shared_input_data, self.shared_input_headers, file + " input")  # inspect the data
+                TrainingDataFactory.plot_dataset_distribution_grid(label_data, self.label_headers, file + " label")  # inspect the data
+            dataset = self.convert_sim_to_training_data(shared_input_data, individual_input_data, label_data, file)
+            datasets.append(dataset)
+        return datasets
+    
+    def get_data_loaders(self, training_data: RotorNetDataset) -> DataLoader:
+        """Generate a data loader for the dataset"""
+        length = int(len(training_data)*self.config["data_usage_ratio"])
+        print(f"Using {length} samples from the dataset for training", f"from source file: {training_data.source_file}")
+        subset = Subset(training_data, range(length))   # use only the beginning subset of the data for training
+        loader = torch.utils.data.DataLoader(subset, batch_size=self.config["simple_shot"], shuffle=self.config["can_shuffle"])
+        return loader
+
+    def prepare_loaderset(self, datasets: list[RotorNetDataset]) -> list[DataLoader]:
         """Generate a list of data loaders"""
         loaderset = []
         for data in datasets:

@@ -86,11 +86,68 @@ class SimpleNet(nn.Module):
             self.heads.append(net)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = (x - self.input_mean) * self.input_scale
         shared_net_output = self.shared_backbone(x) 
         head_outputs = [head(shared_net_output) for head in self.heads]
         output = torch.cat(head_outputs, dim=-1)    # concatenate head outputs to get final output
         return output  # scale up to match the range of disturbance forces
 
+
+class NaiveSumRotorNet(nn.Module):
+    """A per rotor network without normalization or bias append"""
+    def __init__(self, dim_of_input, dim_of_output, dim_of_layers: list, dim_of_shared_features, head_layer_dimensions: list, input_mean, input_scale, output_mean, output_scale):
+        super().__init__()
+        self.shared_net = SimpleNet(dim_of_input,
+          dim_of_output,
+          dim_of_layers,
+          dim_of_shared_features,
+          head_layer_dimensions,
+          input_mean, input_scale, output_mean, output_scale)
+        
+    def forward(self, shared: torch.Tensor, individual_list: list[torch.Tensor]) -> torch.Tensor:
+        total = 0        # 0 works as safe accumulator for tensors
+        for ind in individual_list:
+            each_rotor_input = torch.cat([shared, ind], dim=-1)  # dim = -1 is equivalent to dim = 1 here
+            out = self.shared_net(each_rotor_input)               
+            total = total + out                                  
+        return total
+
+
+class AttentionBasedRotorNet(nn.Module):
+    """Transformer version"""
+    def __init__(self, dim_of_input, dim_of_output, dim_of_layers: list, dim_of_shared_features, head_layer_dimensions: list, input_mean, input_scale, output_mean, output_scale):
+        super().__init__()
+        d_model = 8 # TODO: put in config
+        self.shared_net = SimpleNet(dim_of_input,
+          d_model,
+          dim_of_layers,
+          dim_of_shared_features,
+          head_layer_dimensions,
+          input_mean, input_scale, output_mean, output_scale)
+        
+        nhead = 2 # TODO: put in config
+        self.attn = nn.MultiheadAttention(d_model, nhead, batch_first=True)
+        self.output_head = nn.Linear(d_model, dim_of_output)
+
+        
+    def forward(self, shared: torch.Tensor, individual_list: list[torch.Tensor]) -> torch.Tensor:
+        # 1) same as before, but save all per-rotor outputs as a sequence
+        outs = []
+        for ind in individual_list:
+            each_rotor_input = torch.cat([shared, ind], dim=-1)
+            out = self.shared_net(each_rotor_input)  # assume [batch_size, dim_of_feature_vector_per_rotor]
+            outs.append(out.unsqueeze(1))   # [batch_size, 1, dim_of_feature_vector_per_rotor]
+
+        seq = torch.cat(outs, dim=1)        # [batch_size, num_rotors, dim_of_feature_vector_per_rotor]
+
+        # 2) self-attention over rotors
+        context, attn_weights = self.attn(seq, seq, seq)  # [batch_size, num_rotors, dim_of_feature_vector_per_rotor], [batch_size, num_rotors, num_rotors]
+
+        # 3) replace naive sum with pooled attention output
+        pooled = context.mean(dim=1)        # [batch_size, dim_of_feature_vector_per_rotor]
+
+        # 4) final head (you can add a Linear here)
+        return self.output_head(pooled)
 
 class DiamlModelFactory:
     def __init__(self,
@@ -250,6 +307,102 @@ class SimpleNetFactory:
         }
 
 
+class RotorNetFactory:
+    def __init__(self,
+                 dim_of_input,
+                 dim_of_label,
+                 input_mean,
+                 input_scale,
+                 label_mean,
+                 label_scale,
+                 customized_config: dict = None
+                 ):
+        """consider the following example to predict disturbance forces:
+        (v_0 v_1 v_2 q_0 q_1 q_2 q_3 pwm_0 pwm_1 pwm_2 pwm_3)
+        velocity (3) + quaternion (4) + input (4) = 11
+        dim_of_input: input dimension (11 in this case)
+        dim_of_feature: features that phi_net need to capture (not necessarily the same as dim of disturbance forces because it needs to interact with adaptation coefficients)
+        From the paper, the feature dimension is 5.
+        dim_of_label: dimension of label vector. Because we are trying to compare the disturbance force in x y z direction,
+        the label vector is a 3-dim vector because disturbance torque is not estimated in the paper.
+        """               
+        self.config = self.set_up_config(customized_config)
+        self.dim_of_input = dim_of_input    # dim_of_shared_input + dim_of_individual_input
+        self.dim_of_label = dim_of_label
+        self.input_mean = input_mean
+        self.input_scale = input_scale
+        self.label_mean = label_mean
+        self.label_scale = label_scale        
+        # temporary solution to hard code input_scale and mean. TODO: do it in data factory
+        self.input_scale =torch.ones(self.dim_of_input, requires_grad=False)
+        self.input_scale[-1] = 1  # scale down rpm input
+        self.input_mean = torch.zeros(self.dim_of_input, requires_grad=False)
+        self.input_mean[-1] = 1000
+
+    def generate_nets(self):
+        if self.config["has_attention"]:
+            net = AttentionBasedRotorNet(
+                self.dim_of_input,
+                self.dim_of_label,
+                self.config["SimpleNet"]["hidden_layer_dimensions"],
+                self.config["SimpleNet"]["dim_of_shared_features"],
+                self.config["SimpleNet"]["head_layer_dimensions"],
+                self.input_mean,
+                self.input_scale,
+                self.label_mean,
+                self.label_scale
+            )
+        else:
+            net = NaiveSumRotorNet(
+                self.dim_of_input,
+                self.dim_of_label,
+                self.config["SimpleNet"]["hidden_layer_dimensions"],
+                self.config["SimpleNet"]["dim_of_shared_features"],
+                self.config["SimpleNet"]["head_layer_dimensions"],
+                self.input_mean,
+                self.input_scale,
+                self.label_mean,
+                self.label_scale
+            )
+        return net
+
+    @staticmethod
+    def set_up_config(customized_config: dict = None):
+        """Set up the model configuration. If customized_config is None, load the default config."""
+        if customized_config is None:
+            config_path = DiamlModelFactory.get_default_config_path()
+            config = DiamlModelFactory.load_config(config_path)
+        else:
+            config = customized_config  # in case of loading the trained model, use the documented config at generation time
+        return config
+
+    @staticmethod
+    def get_default_config_path():
+        """Get the default path of the model configuration file"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(current_dir, "model_config.yaml")
+
+    @staticmethod
+    def load_config(config_path: str):
+        """Load model configuration from YAML file"""
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+        return config
+    
+    def generate_self_config(self) -> dict:
+        """Generate a self-contained configuration dictionary. 
+        Use this as input argument to recreate the same factory and produce the exact model later."""
+        return {
+            "dim_of_input": self.dim_of_input,
+            "dim_of_label": self.dim_of_label,
+            "input_mean": self.input_mean,
+            "input_scale": self.input_scale,
+            "label_mean": self.label_mean,
+            "label_scale": self.label_scale,
+            "customized_config": self.config
+        }
+
+
 def save_diaml_model(name, phi_net: PhiNet, h_net: HNet, model_factory_config: dict, input_label_map: dict) -> None:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         file_path = os.path.join(current_dir, "model", name + ".pth")
@@ -316,6 +469,39 @@ def load_simple_model(name) -> SimpleNet:
     for key, value in package["simple_net_io_fields"].items():
         print(key, value)
     return simple_net
+
+def save_rotor_net_model(name, rotor_net: NaiveSumRotorNet | AttentionBasedRotorNet, model_factory_config: dict, input_label_map: dict) -> None:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(current_dir, "model", name + ".pth")
+        torch.save({"rotor": rotor_net.state_dict(),
+                    "model_factory_init_args": model_factory_config,
+                    "rotor_net_io_fields": input_label_map}, 
+                    file_path)
+        print(f"Model saved to {os.path.relpath(file_path, os.getcwd())}")
+
+def load_rotor_net_model(name) -> NaiveSumRotorNet | AttentionBasedRotorNet:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(current_dir, "model", name + ".pth")       
+    package = torch.load(file_path)
+
+    # recreate the model factory instance that generated the trained model
+    model_factory_instance = RotorNetFactory(
+        package["model_factory_init_args"]["dim_of_input"],
+        package["model_factory_init_args"]["dim_of_label"],
+        package["model_factory_init_args"]["input_mean"],
+        package["model_factory_init_args"]["input_scale"],
+        package["model_factory_init_args"]["label_mean"],
+        package["model_factory_init_args"]["label_scale"],
+        customized_config=package["model_factory_init_args"]["customized_config"]
+    )
+    rotor_net = model_factory_instance.generate_nets()
+    rotor_net.load_state_dict(package["rotor"])
+    rotor_net.eval()
+    print("rotor net input output fields:")
+    for key, value in package["rotor_net_io_fields"].items():
+        print(key, value)
+    print("has_attention:", model_factory_instance.config["has_attention"])
+    return rotor_net
 
 
 

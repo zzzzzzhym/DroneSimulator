@@ -207,17 +207,21 @@ class BemtParamFitter:
     def compute_residual_force(self, f_inertial_frame_frd, a_groundtruth):
         """Compute the residual force between the model thrust and the ground truth thrust.
         Assumes a_groundtruth is in the inertial frame (FRD).
+        The residual is in the inertial frame (FRD).
         """
         f_gt_inertial_frame = -self.params.m * parameters.Environment.g*np.array([0.0, 0.0, 1.0]) + self.params.m * a_groundtruth
         f_residual = f_inertial_frame_frd - f_gt_inertial_frame
         return f_residual
 
-    def get_residual_force(self, dataset: data_factory.FittingDataset, i: int, lookup_table=None, is_using_lookup_table=False):
+    def get_residual_force(self, dataset: data_factory.FittingDataset, i: int, lookup_table=None, is_using_lookup_table=False, is_in_body_frame=False):
+        """The residual is in the inertial frame (FRD)."""
         if is_using_lookup_table:
             f_inertial_frame_frd = self.compute_total_force_inertial_frame_frd_with_lookup_table(dataset, i, lookup_table)
         else:
             f_inertial_frame_frd = self.compute_total_force_inertial_frame_frd(dataset, i)
         f_residual = self.compute_residual_force(f_inertial_frame_frd, dataset.dv[i])
+        if is_in_body_frame:
+            f_residual = dataset.shared_r_disk[i].T @ f_residual
         return f_residual
 
     def compute_model_thrust(self, u_free, v_forward, r_disk, omega, is_ccw_blade):
@@ -368,7 +372,7 @@ class BemtParamFitter:
     def make_residual_force_columns(self, dataset: data_factory.FittingDataset, lookup_table):
         f_residual = []
         for i in range(len(dataset)):
-            f_residual.append(self.get_residual_force(dataset, i, lookup_table, True))
+            f_residual.append(self.get_residual_force(dataset, i, lookup_table, True, True))
         f_residual = np.array(f_residual)
         df = pd.read_csv(dataset.path_to_data_file)
         df["f_residual"] = f_residual.tolist()

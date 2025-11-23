@@ -1,8 +1,0 @@
-# in development
-
-SimpleNet:
-  hidden_layer_dimensions:
-    - 32
-    - 16
-
-dim_of_feature: 2
