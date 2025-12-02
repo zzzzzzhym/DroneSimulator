@@ -9,5 +9,3 @@ SimpleNet:
   head_layer_dimensions:
     - 32
     - 32
-
-has_attention: True

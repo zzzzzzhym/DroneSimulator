@@ -402,7 +402,11 @@ class SimpleTrainer:
         axs[1].plot(self.loss_trace_on_validation)
         axs[1].set_ylabel('loss_trace_on_validation [N]')
         axs[1].set_xlabel('epoch')
-
+        # np.savez(
+        #     f"zerowind.npz",
+        #     loss_trace=self.loss_trace,
+        #     loss_trace_on_validation=self.loss_trace_on_validation,
+        # )
     
 class RotorNetTrainer:
     def __init__(self,

@@ -27,6 +27,7 @@ class Plotter:
         self.plot_rotor(logger_output)
         self.plot_disturbance_force(logger_output)
         self.plot_3d_trace(logger_output)
+        self.plot_task_trajectory(logger_output)
         if has_animation:
             self.ani = self.animate_pose(logger_output)
 
@@ -467,7 +468,7 @@ class Plotter:
         axs[0, 0].plot(self.t_span, logger["f_disturb_est"][:, 0], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
         axs[0, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 0], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
         axs[0, 0].plot(self.t_span, logger["f_disturb_est_bemt"][:, 0], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_bemt')
-        axs[0, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 0], marker='.', markersize=5, linewidth=0.3, label='f_disturb_sensed_raw')
+        axs[0, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 0], marker='.', markersize=3, linewidth=0.2, alpha = 0.3, label='f_disturb_sensed_raw')
         axs[0, 0].plot(self.t_span, logger["f_propeller"][:, 0], marker='.', markersize=5, linewidth=0.2, label='f_propeller')
         axs[0, 0].plot(self.t_span, logger["f_body"][:, 0], marker='.', markersize=5, linewidth=0.1, label='f_body')
         axs[0, 0].set_ylabel("f_x")
@@ -477,7 +478,7 @@ class Plotter:
         axs[1, 0].plot(self.t_span, logger["f_disturb_est"][:, 1], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
         axs[1, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
         axs[1, 0].plot(self.t_span, logger["f_disturb_est_bemt"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_bemt')
-        axs[1, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 1], marker='.', markersize=5, linewidth=0.5, label='f_disturb_sensed_raw')
+        axs[1, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 1], marker='.', markersize=3, linewidth=0.2, alpha = 0.3, label='f_disturb_sensed_raw')
         axs[1, 0].plot(self.t_span, logger["f_propeller"][:, 1], marker='.', markersize=5, linewidth=0.2, label='f_propeller')
         axs[1, 0].plot(self.t_span, logger["f_body"][:, 1], marker='.', markersize=5, linewidth=0.1, label='f_body')        
         axs[1, 0].set_ylabel("f_y")
@@ -487,7 +488,7 @@ class Plotter:
         axs[2, 0].plot(self.t_span, logger["f_disturb_est"][:, 2], marker='.', markersize=7, linewidth=1, label='f_disturb_est')
         axs[2, 0].plot(self.t_span, logger["f_disturb_est_base"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_base')
         axs[2, 0].plot(self.t_span, logger["f_disturb_est_bemt"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_est_bemt')
-        axs[2, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 2], marker='.', markersize=5, linewidth=0.5, label='f_disturb_sensed_raw')
+        axs[2, 0].plot(self.t_span, logger["f_disturb_sensed_raw"][:, 2], marker='.', markersize=3, linewidth=0.2, alpha = 0.3, label='f_disturb_sensed_raw')
         axs[2, 0].plot(self.t_span, logger["f_propeller"][:, 2], marker='.', markersize=5, linewidth=0.2, label='f_propeller')
         axs[2, 0].plot(self.t_span, logger["f_body"][:, 2], marker='.', markersize=5, linewidth=0.1, label='f_body')        
         axs[2, 0].set_ylabel("f_z")
@@ -649,6 +650,47 @@ class Plotter:
         axs9.invert_zaxis()
         axs9.invert_yaxis()
 
+    def plot_task_trajectory(self, logger: np.ndarray):
+        fig10, axs10 = plt.subplots(1, 1, sharex=True)
+        axs10 = fig10.add_subplot(111, projection='3d')
+        axs10.plot3D(logger["x_d"][:, 0],
+                     logger["x_d"][:, 1],
+                     logger["x_d"][:, 2], '.', c='blue', label='Points')
+        # Wall parameters (for paper result)
+        wall_origin = np.array([-0.5, 0, 0])
+        wall_norm = np.array([1, 0, 0])
+        wall_length = 4.0
+        wx, wy, wz = generate_wall_surface(wall_origin, wall_norm, wall_length)
+        # Plot wall
+        axs10.plot_surface(wx, wy, wz, color='orange', alpha=0.2)
+        # Plot vertical edges of the wall
+        # Extract vertical edge points from wall surface mesh
+        corner_bottom_left  = [wx[0, 0], wy[0, 0], wz[0, 0]]
+        corner_top_left     = [wx[-1, 0], wy[-1, 0], wz[-1, 0]]
+        corner_bottom_right = [wx[0, -1], wy[0, -1], wz[0, -1]]
+        corner_top_right    = [wx[-1, -1], wy[-1, -1], wz[-1, -1]]
+        # Draw left vertical edge
+        axs10.plot(
+            [corner_bottom_left[0], corner_top_left[0]],
+            [corner_bottom_left[1], corner_top_left[1]],
+            [corner_bottom_left[2], corner_top_left[2]],
+            color='black', linewidth=2
+        )
+
+        # Draw right vertical edge
+        axs10.plot(
+            [corner_bottom_right[0], corner_top_right[0]],
+            [corner_bottom_right[1], corner_top_right[1]],
+            [corner_bottom_right[2], corner_top_right[2]],
+            color='black', linewidth=2
+        )
+        axs10.set_xlabel('X')
+        axs10.set_ylabel('Y')
+        axs10.set_zlabel('Z')
+        axs10.axis('equal')
+        axs10.invert_zaxis()
+        axs10.invert_yaxis()
+
     def plot_pose_in_given_time(self, logger: np.ndarray, t: float):
         idx = int(t/self.dt)
         idx = np.clip(idx, 0, len(self.t_span)-1)
@@ -720,3 +762,25 @@ def update_frame(ax: plt.Axes, text, pos: np.ndarray, pose_ref: np.ndarray, pose
             b3[:, 2], 'red')
     text.set_text(f'timestamp: {t}')
     return ax, text
+
+def generate_wall_surface(origin, normal, length, resolution=2):
+    """
+    Generate a square wall centered at 'origin' with normal 'normal'.
+    Returns X, Y, Z grids for surface plotting.
+    """
+    normal = normal / np.linalg.norm(normal)
+    # Find two orthogonal in-plane vectors
+    if np.allclose(normal, [1, 0, 0]):
+        tangent1 = np.array([0, 1, 0])
+    else:
+        tangent1 = np.cross(normal, [1, 0, 0])
+        tangent1 = tangent1 / np.linalg.norm(tangent1)
+    tangent2 = np.cross(normal, tangent1)
+
+    grid = np.linspace(-length/2, length/2, resolution)
+    u, v = np.meshgrid(grid, grid)
+    points = (origin[:, None, None] +
+              tangent1[:, None, None] * u +
+              tangent2[:, None, None] * v)
+    return points[0], points[1], points[2]
+

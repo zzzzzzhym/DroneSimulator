@@ -81,9 +81,19 @@ class Evaluator:
         colors = plt.cm.tab10.colors  # 10 distinct colors (cycle if >10 dims)
 
         plt.figure(figsize=(12, 6))
+        mse_vector = []
+        mse_vector_zero_prediction = []
+        
+        for dim in range(num_dims):
+            mse_vector.append(np.mean(mse_array[:, dim]))
+            mse_vector_zero_prediction.append(np.mean(zero_prediction_mse_array[:, dim]))
+        mse_vector = np.sum(mse_vector)
+        mse_vector_zero_prediction = np.sum(mse_vector_zero_prediction)
+        print(f"overall average mse after train: {mse_vector} before train: {mse_vector_zero_prediction}")
+        
         for dim in range(num_dims):
             color = colors[dim % len(colors)]
-            print(f"average mse for dim {dim}: {np.mean(mse_array[:, dim])}")
+            print(f"average mse for dim {dim}: after train: {np.mean(mse_array[:, dim])} before train: {np.mean(zero_prediction_mse_array[:, dim])}")
             plt.bar(x + dim * width,
                     mse_array[:, dim],
                     width=width,

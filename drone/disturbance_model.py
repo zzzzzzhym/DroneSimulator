@@ -264,11 +264,14 @@ class WallContact(DisturbanceForce):
         self.delayed_rotor_set_speed = [0, 0, 0, 0]  # only works for wind near wall disturbance
         self.f_body = np.zeros(3)  
         self.f_propeller = np.zeros(3)  
+        self.f_contact_normal = np.zeros(3)
+        self.f_contact_friction = np.zeros(3)
+        self.tip_position_inertial_frame = np.zeros(3)
 
     def get_vertical_distance_wall_to_tip(self, state: dynamics_state.State):
         """Negative value means penetration into the wall"""
-        tip_position_inertial_frame = state.position + state.pose@utils.FrdFluConverter.flip_vector(self.end_sponge.tip_position)
-        return (tip_position_inertial_frame - self.wall.wall_origin) @ self.wall.wall_norm
+        self.tip_position_inertial_frame = state.position + state.pose@utils.FrdFluConverter.flip_vector(self.end_sponge.tip_position)
+        return (self.tip_position_inertial_frame - self.wall.wall_origin) @ self.wall.wall_norm
 
     def decompose_contact_point_velocity_on_wall(self, state: dynamics_state.State):
         v_tip = state.v + np.cross(state.omega, state.pose@utils.FrdFluConverter.flip_vector(self.end_sponge.tip_position))
@@ -294,14 +297,14 @@ class WallContact(DisturbanceForce):
     def get_sponge_contact_force(self, p_wall_to_tip, v_contact_point_tangential):
         deformed_length = self.get_sponge_deformed_length(p_wall_to_tip)
         # normal force from wall
-        f_normal = self.end_sponge.k_sponge * deformed_length * self.wall.wall_norm
+        self.f_contact_normal = self.end_sponge.k_sponge * deformed_length * self.wall.wall_norm
         # friction force from wall
         v_contact_point_tangential_norm = np.linalg.norm(v_contact_point_tangential)
         if v_contact_point_tangential_norm < 0.1:   # artificial transient stage for pre-sliding friction
-            f_friction = -self.end_sponge.miu_friction * np.linalg.norm(f_normal) * v_contact_point_tangential
+            self.f_contact_friction = -self.end_sponge.miu_friction * np.linalg.norm(self.f_contact_normal) * v_contact_point_tangential
         else:
-            f_friction = -self.end_sponge.miu_friction * np.linalg.norm(f_normal) * v_contact_point_tangential/v_contact_point_tangential_norm
-        return f_normal + f_friction
+            self.f_contact_friction = -self.end_sponge.miu_friction * np.linalg.norm(self.f_contact_normal) * v_contact_point_tangential/v_contact_point_tangential_norm
+        return self.f_contact_normal + self.f_contact_friction
 
     def update_explicit_wrench(self, t: float, state: dynamics_state.State, rotor_set: rotor.RotorSet, force_control, torque_control) -> None:
         # TODO: consider zero contact force out of wall width range 

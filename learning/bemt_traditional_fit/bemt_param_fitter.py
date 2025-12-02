@@ -67,7 +67,7 @@ class BemtParamFitter:
             "f_inertial_frame_frd": []
         }
 
-    def make_lookup_table(self, fitted_params, table_name: str):
+    def make_lookup_table(self, fitted_params, table_name: str, is_hover_only: bool = False):
         blade = inflow_model.blade_params.APC_8x6()
         blade.cl_1, blade.cl_2, blade.cd, blade.alpha_0 = fitted_params  # fitted parameters
         print(
@@ -77,7 +77,10 @@ class BemtParamFitter:
             f"cd = {blade.cd}\n"
             f"alpha_0 = blade.alpha_0 "
         )
-        PropellerLookupTable.Maker.make_propeller_lookup_table(table_name, blade)
+        if is_hover_only:
+            PropellerLookupTable.Maker.make_propeller_lookup_table(table_name, blade, u_free_x_range=np.array([0.0]), pitch_range=np.array([0.0]))
+        else:
+            PropellerLookupTable.Maker.make_propeller_lookup_table(table_name, blade)
 
     def adjust_resolution(self, is_fine_tune):
         """When doing coarse search for optimization, sparse sample can save computation time. In other cases, dense sample is preferred."""
