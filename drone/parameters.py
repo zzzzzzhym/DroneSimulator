@@ -130,7 +130,7 @@ class EndEffector:
     Center-tip length refer to Guo, Xiaofeng, et al. "Flying calligrapher: Contact-aware motion and force planning and control for aerial manipulation." IEEE Robotics and Automation Letters (2024).
     """
     def __init__(self):
-        self.tip_position = np.array([-0.5, 0.0, 0.0])  # position of end effector in body frame FLU[m]
+        self.tip_position = np.array([-0.45, 0.0, 0.0])  # position of end effector in body frame FLU[m]
         self.sponge_radius = 0.1  # radius of the spherical sponge [m]
         self.k_sponge = 100*0.1  # spring constant of the sponge [N/m]
         self.miu_friction = 0.4  # friction coefficient between sponge and wall [unitless]

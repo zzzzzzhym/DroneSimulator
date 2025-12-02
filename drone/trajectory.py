@@ -194,7 +194,7 @@ class StraightX(TrajectoryReference):
 class CircleYZ(TrajectoryReference):
     def step_reference_state(self, t) -> None:
         amplitude = 0.4
-        frequency = np.pi*0.5
+        frequency = np.pi*0.25*0.5
         self.x_d = np.array([0.0,
                      amplitude * np.sin(frequency * t),
                      amplitude * np.cos(frequency * t) - amplitude])

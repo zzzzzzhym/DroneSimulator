@@ -51,7 +51,7 @@ class DroneController:
         self.is_warmed_up = False
         self.warm_up_count = 0
         self.warm_up_count_max = 0
-        self.is_using_baseline_disturbance_estimator = True
+        self.is_using_baseline_disturbance_estimator = False
         self.is_using_pure_diaml_disturbance_estimator = False
         self.is_using_bemt_disturbance_estimator = False
         self.is_using_inflow_model = False
