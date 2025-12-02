@@ -113,6 +113,10 @@ class Engine:
         logger.buffer["rotor_1_rotation_spd_delayed"].append(self.scenario.dynamics.disturbance.delayed_rotor_set_speed[1]) # only works for wind near wall disturbance
         logger.buffer["rotor_2_rotation_spd_delayed"].append(self.scenario.dynamics.disturbance.delayed_rotor_set_speed[2]) # only works for wind near wall disturbance
         logger.buffer["rotor_3_rotation_spd_delayed"].append(self.scenario.dynamics.disturbance.delayed_rotor_set_speed[3]) # only works for wind near wall disturbance
+
+        # logger.buffer["tip_position"].append(self.scenario.dynamics.disturbance.wall_contact.tip_position_inertial_frame) # only works wall contact disturbance
+        # logger.buffer["f_contact_normal"].append(self.scenario.dynamics.disturbance.wall_contact.f_contact_normal) # only works wall contact disturbance
+
         logger.buffer["rotor_0_position"].append(self.scenario.dynamics.rotors.rotors[0].position_inertial_frame.copy())
         logger.buffer["rotor_1_position"].append(self.scenario.dynamics.rotors.rotors[1].position_inertial_frame.copy())
         logger.buffer["rotor_2_position"].append(self.scenario.dynamics.rotors.rotors[2].position_inertial_frame.copy())

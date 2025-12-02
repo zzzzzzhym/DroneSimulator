@@ -236,12 +236,12 @@ class BemtFittedDisturbanceEstimatorV1(BaselineDisturbanceEstimator):
         self.tq_z = UnitDisturbance(1, self.dt)
 
         # tune down measurement noise to suppress noising simplenet output
-        # self.f_x.r = self.f_x.r*0.1
-        # self.f_y.r = self.f_y.r*0.1
-        # self.f_z.r = self.f_z.r*0.1
-        # self.tq_x.r = self.tq_x.r*0.1
-        # self.tq_y.r = self.tq_y.r*0.1
-        # self.tq_z.r = self.tq_z.r*0.1
+        self.f_x.r = self.f_x.r*0.1
+        self.f_y.r = self.f_y.r*0.1
+        self.f_z.r = self.f_z.r*0.1
+        self.tq_x.r = self.tq_x.r*0.1
+        self.tq_y.r = self.tq_y.r*0.1
+        self.tq_z.r = self.tq_z.r*0.1
         self.predicted_disturbance = np.zeros(3)
 
     def predict_disturbance(

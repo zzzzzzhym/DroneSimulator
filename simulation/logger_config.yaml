@@ -151,3 +151,7 @@ sensed_dv:
   can_save_to_file: true
 sensed_omega:
   can_save_to_file: true
+tip_position:
+  can_save_to_file: false
+f_contact_normal:
+  can_save_to_file: false

@@ -51,10 +51,10 @@ class DroneController:
         self.is_warmed_up = False
         self.warm_up_count = 0
         self.warm_up_count_max = 0
-        self.is_using_baseline_disturbance_estimator = True
+        self.is_using_baseline_disturbance_estimator = False
         self.is_using_pure_diaml_disturbance_estimator = False
-        self.is_using_bemt_disturbance_estimator = False
-        self.is_using_inflow_model = False
+        self.is_using_bemt_disturbance_estimator = True
+        self.is_using_inflow_model = True
         print("DroneController: using inflow model: ", self.is_using_inflow_model)
         print("DroneController: using pure DIAML disturbance estimator: ", self.is_using_pure_diaml_disturbance_estimator)
         print("DroneController: using baseline disturbance estimator: ", self.is_using_baseline_disturbance_estimator)
@@ -123,7 +123,8 @@ class DroneController:
         self.torque_disturb_base = self.baseline_disturbance_estimator.get_disturbance_torque()
 
         predicted_force, predicted_torque = self.get_predicted_air_force(sensor_data)
-        predicted_force = predicted_force + self.f  # f_predicted = f_control + f_disturb; f_control = -self.f
+        # predicted_force = predicted_force + self.f  # f_predicted = f_control + f_disturb; f_control = -self.f
+        predicted_force = predicted_force*np.array([1.0, 1.0, 0.0]) # z contains rotor thrust, is not part of disturbance
         predicted_torque = predicted_torque - self.torque  # t_predicted = t_control + t_disturb; t_control = self.torque
         self.bemt_disturbance_estimator.step_disturbance(
             sensor_data.v,
@@ -143,7 +144,7 @@ class DroneController:
             predicted_torque
         )
         self.f_disturb_bemt = self.bemt_disturbance_estimator.get_disturbance_force()
-        self.torque_disturb_bemt = self.bemt_disturbance_estimator.get_disturbance_torque()
+        self.torque_disturb_bemt = self.bemt_disturbance_estimator.get_disturbance_torque()*0.0 # assume no angular acceleration available to estimate torque disturbance
 
     def get_predicted_air_force(self, sensor_data: sensor.SensorData):
         """Get predicted air force and torque on drone from propeller lookup table.
