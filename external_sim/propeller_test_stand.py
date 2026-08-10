@@ -1,0 +1,38 @@
+import numpy as np
+
+from external_sim.main_process import P600
+
+
+class PropellerTestStand(P600):
+    """Single-rotor test stand scenario.
+
+    Identical to P600 except throttle assignment: rotor 0 ramps 0 → 1 over
+    STAGE_1_DURATION seconds after an initial drop phase. Rotors 1-3 stay at 0.
+    The controller command is ignored.
+
+    Stage 0 (STAGE_0_DURATION sec): all throttles = 0, body drops onto floor.
+    Stage 1 (STAGE_1_DURATION sec): rotor 0 throttle ramps linearly 0 → 1.
+    """
+
+    STAGE_0_DURATION = 1.0    # seconds
+    STAGE_1_DURATION = 10.0   # seconds
+
+    def configure_sim_environment(self, wind_speed, wall_offset, init_position):
+        super().configure_sim_environment(wind_speed, wall_offset, init_position)
+        wall = self.main_api.get_object('floor')
+        self.main_api.set_object_property_uint(wall, 'enabled', 1)
+        self.main_api.set_object_property_float(wall, 'position.x', init_position[0])  # so that stand does not fall outside of the wall (floor)
+
+    def set_motor_throttles(self, speeds: np.ndarray) -> dict:
+        t = self.i * self.dt
+        active_rotor_ids = [0] # 0 defaults to active
+        if t < self.STAGE_0_DURATION:
+            throttle_0 = 0.0
+        else:
+            throttle_0 = float(np.clip(
+                (t - self.STAGE_0_DURATION) / self.STAGE_1_DURATION, 0.0, 1.0
+            ))
+        return {
+            setter: (throttle_0 if idx in active_rotor_ids else 0.0)
+            for idx, setter in enumerate(self.motor_throttle_setters)
+        }

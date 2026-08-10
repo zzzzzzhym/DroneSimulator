@@ -1,0 +1,213 @@
+import unittest
+
+import numpy as np
+import pandas as pd
+
+import common_utils.file_manager
+from inflow_model.blade_params import APC_8x6
+import data_factory
+from learning.bemt_traditional_fit.fitting_config import FittingConfig
+from learning.bemt_traditional_fit.single_rotor_model import SingleRotorBemtModel
+from learning.bemt_traditional_fit.single_rotor_objective import SingleRotorObjective
+
+_CONFIG = FittingConfig.from_yaml(
+    common_utils.file_manager.find_path_to_folder(
+        ["learning", "bemt_traditional_fit", "config_single_rotor.yaml"])
+)
+
+
+def _make_mock_dataset(n: int, omega_val: float = 300.0,
+                       sensed_wind: np.ndarray = None) -> data_factory.FittingDataset:
+    """Build a minimal FittingDataset with rotor_0_sensed_wind_velocity set.
+
+    sensed_wind: 3-vector applied uniformly to all n samples (default zeros).
+    """
+    if sensed_wind is None:
+        sensed_wind = np.zeros(3)
+    df_data = {}
+    for rotor in range(4):
+        df_data[f"rotor_{rotor}_local_wind_velocity"] = [np.zeros(3).tolist() for _ in range(n)]
+        df_data[f"rotor_{rotor}_velocity"] = [np.zeros(3).tolist() for _ in range(n)]
+        df_data[f"rotor_{rotor}_rotation_spd"] = [omega_val if rotor == 0 else 0.0] * n
+        df_data[f"rotor_{rotor}_f_rotor_inertial_frame"] = [np.zeros(3).tolist() for _ in range(n)]
+        df_data[f"rotor_{rotor}_sensed_wind_velocity"] = [sensed_wind.tolist() for _ in range(n)]
+    df_data["shared_r_disk"] = [np.eye(3).tolist() for _ in range(n)]
+    df_data["sensed_dv"] = [np.zeros(3).tolist() for _ in range(n)]
+    df_data["sensed_omega"] = [np.zeros(3).tolist() for _ in range(n)]
+    df_data["v"] = [np.zeros(3).tolist() for _ in range(n)]
+    return data_factory.FittingDataset(pd.DataFrame(df_data), "mock")
+
+
+_STAGE_0 = 1.0
+_STAGE_1 = 10.0
+
+
+def _throttle(t):
+    """Replicates PropellerTestStand._compute_throttle_rotor0 without importing the class."""
+    if t < _STAGE_0:
+        return 0.0
+    return float(np.clip((t - _STAGE_0) / _STAGE_1, 0.0, 1.0))
+
+
+class TestPropellerTestStandThrottleLogic(unittest.TestCase):
+    """Tests stage transition logic without importing arcpy/pyvista."""
+
+    def test_stage0_zero_throttle(self):
+        self.assertAlmostEqual(_throttle(0.0), 0.0)
+        self.assertAlmostEqual(_throttle(0.99), 0.0)
+
+    def test_stage1_start(self):
+        self.assertAlmostEqual(_throttle(1.0), 0.0)
+
+    def test_stage1_midpoint(self):
+        self.assertAlmostEqual(_throttle(6.0), 0.5)
+
+    def test_stage1_end_clipped(self):
+        self.assertAlmostEqual(_throttle(11.0), 1.0)
+        self.assertAlmostEqual(_throttle(20.0), 1.0)
+
+
+class TestSingleRotorBemtModel(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.blade = APC_8x6()
+        cls.model = SingleRotorBemtModel(cls.blade, is_ccw_rotor0=False, model_config=_CONFIG.model)
+
+    def test_compute_rotor0_thrust_zero_omega(self):
+        f = self.model.compute_rotor0_thrust(
+            u_sensed=np.zeros(3),
+            r_disk=np.eye(3),
+            omega=0.0,
+        )
+        np.testing.assert_array_almost_equal(f, np.zeros(3), decimal=5)
+
+    def test_compute_rotor0_thrust_positive_z_for_spinning(self):
+        # With downward sensed wind (simulating induced inflow) and spinning rotor,
+        # BET should predict positive z-thrust (lift direction)
+        u_sensed = np.array([0.0, 0.0, -2.0])  # downward inflow in inertial (FLU)
+        f = self.model.compute_rotor0_thrust(
+            u_sensed=u_sensed,
+            r_disk=np.eye(3),
+            omega=300.0,
+        )
+        self.assertGreater(f[2], 0.0, "BET should predict positive z-thrust (lift)")
+
+    def test_get_residual_force_shape(self):
+        dataset = _make_mock_dataset(5, omega_val=300.0)
+        residual = self.model.get_residual_force(dataset, 0)
+        self.assertEqual(residual.shape, (3,))
+
+    def test_get_residual_force_zero_when_sensor_matches_bet(self):
+        u_sensed = np.array([0.0, 0.0, -2.0])
+        dataset = _make_mock_dataset(2, omega_val=200.0, sensed_wind=u_sensed)
+        f_bet = self.model.compute_rotor0_thrust(
+            u_sensed=u_sensed, r_disk=np.eye(3), omega=200.0
+        )
+        dataset.rotor_0_f_rotor_inertial_frame[0] = f_bet  # r_disk = I so disk == inertial
+        residual = self.model.get_residual_force(dataset, 0)
+        np.testing.assert_array_almost_equal(residual, np.zeros(3), decimal=5)
+
+    def test_model_is_pure_physical_no_decision_var(self):
+        # The physics model must not carry the optimizer's search-space concern.
+        self.assertFalse(hasattr(self.model, "decision_var"))
+        self.assertFalse(hasattr(SingleRotorBemtModel, "BOUNDS"))
+
+    def test_apply_params_takes_physical_coefficients(self):
+        model = SingleRotorBemtModel(APC_8x6(), is_ccw_rotor0=False, model_config=_CONFIG.model)
+        cl_1, cl_2, cd = 5.3, 1.7, 1.8
+        alpha_0, azl, admin = np.radians(20.0), np.radians(-2.0), np.radians(3.0)
+        model.apply_params(np.array([cl_1, cl_2, cd, alpha_0, azl, admin]))
+        coeff = model.blade.aero_coeff
+        self.assertAlmostEqual(coeff.cl_1, cl_1)
+        self.assertAlmostEqual(coeff.cl_2, cl_2)
+        self.assertAlmostEqual(coeff.alpha_0, alpha_0)
+        self.assertAlmostEqual(coeff.alpha_zero_lift, azl)
+        self.assertAlmostEqual(coeff.alpha_d_min, admin)
+        # the coefficient BET reads for a span position is the same (mutated) object
+        self.assertIs(model.blade.get_aero_coeff(model.blade.y_max * 0.5), coeff)
+
+    def test_band_correction_fit_sets_offsets_and_affects_thrust(self):
+        from inflow_model.airfoil.aero_coeff import BandCorrectedAeroCoefficients
+        model = SingleRotorBemtModel(APC_8x6(), is_ccw_rotor0=False, model_config=_CONFIG.model)
+        cl_knots = np.radians([-45.0, -10.0, 10.0, 45.0])
+        cd_knots = np.radians([-45.0, -10.0, 10.0, 45.0])
+        model.configure_for_band_correction_fit(cl_knots, cd_knots)
+        self.assertIsInstance(model.blade.aero_coeff, BandCorrectedAeroCoefficients)
+
+        base = np.array([5.3, 1.7, 1.8, np.radians(20.0), 0.0, 0.0])
+        u, r = np.array([0.0, 0.0, -3.0]), np.eye(3)
+
+        model.apply_params(np.concatenate([base, np.zeros(4), np.zeros(4)]))  # no correction
+        f_zero = model.compute_rotor0_thrust(u, r, 300.0)
+
+        model.apply_params(np.concatenate([base, np.full(4, 0.4), np.zeros(4)]))  # CL offsets
+        f_corr = model.compute_rotor0_thrust(u, r, 300.0)
+
+        np.testing.assert_array_almost_equal(model.blade.aero_coeff.cl_offsets, np.full(4, 0.4))
+        np.testing.assert_array_almost_equal(model.blade.aero_coeff.cd_offsets, np.zeros(4))
+        self.assertFalse(np.allclose(f_zero, f_corr))  # the correction moved the thrust
+
+    def test_sensed_wind_loaded_from_dataset(self):
+        u_sensed = np.array([1.0, 0.5, -2.0])
+        dataset = _make_mock_dataset(3, sensed_wind=u_sensed)
+        np.testing.assert_allclose(dataset.rotor_0_sensed_wind_velocity[0], u_sensed)
+
+    def test_dataset_without_sensed_wind_loads_none(self):
+        """Datasets recorded before this field was added should still load."""
+        n = 2
+        df_data = {}
+        for rotor in range(4):
+            df_data[f"rotor_{rotor}_local_wind_velocity"] = [np.zeros(3).tolist() for _ in range(n)]
+            df_data[f"rotor_{rotor}_velocity"] = [np.zeros(3).tolist() for _ in range(n)]
+            df_data[f"rotor_{rotor}_rotation_spd"] = [0.0] * n
+            df_data[f"rotor_{rotor}_f_rotor_inertial_frame"] = [np.zeros(3).tolist() for _ in range(n)]
+        df_data["shared_r_disk"] = [np.eye(3).tolist() for _ in range(n)]
+        df_data["sensed_dv"] = [np.zeros(3).tolist() for _ in range(n)]
+        df_data["sensed_omega"] = [np.zeros(3).tolist() for _ in range(n)]
+        df_data["v"] = [np.zeros(3).tolist() for _ in range(n)]
+        dataset = data_factory.FittingDataset(pd.DataFrame(df_data), "mock")
+        self.assertIsNone(dataset.rotor_0_sensed_wind_velocity)
+
+
+class TestSingleRotorObjective(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        blade = APC_8x6()
+        cls.model = SingleRotorBemtModel(blade, is_ccw_rotor0=False, model_config=_CONFIG.model)
+        cls.objective = SingleRotorObjective(cls.model)
+
+    def test_get_loss_returns_scalar(self):
+        dataset = _make_mock_dataset(10, omega_val=200.0)
+        # objective works in physical coefficients.
+        x = np.array([5.3, 1.7, 1.8, np.radians(20.6), np.radians(-2.0), np.radians(3.0)])
+        loss = self.objective.get_loss(x, [dataset])
+        self.assertIsInstance(loss, float)
+        self.assertGreaterEqual(loss, 0.0)
+
+    def test_get_loss_lower_when_sensor_matches_bet(self):
+        # x is a physical coefficient vector; the matching model is set to the same values.
+        cl_1, cl_2, cd, alpha_0, azl, admin = (
+            5.3, 1.7, 1.8, np.radians(20.6), np.radians(-2.0), np.radians(3.0))
+        x = np.array([cl_1, cl_2, cd, alpha_0, azl, admin])
+        u_sensed = np.array([0.0, 0.0, -2.0])
+
+        dataset_zero = _make_mock_dataset(10, omega_val=200.0, sensed_wind=u_sensed)
+        loss_zero = self.objective.get_loss(x, [dataset_zero])
+
+        dataset_match = _make_mock_dataset(10, omega_val=200.0, sensed_wind=u_sensed)
+        model_tmp = SingleRotorBemtModel(APC_8x6(), is_ccw_rotor0=False, model_config=_CONFIG.model)
+        model_tmp.blade.aero_coeff.update_fit_params(cl_1, cl_2, cd, alpha_0, azl, admin)
+        for i in range(10):
+            f_bet = model_tmp.compute_rotor0_thrust(
+                u_sensed=u_sensed, r_disk=np.eye(3), omega=200.0
+            )
+            dataset_match.rotor_0_f_rotor_inertial_frame[i] = f_bet
+        loss_match = self.objective.get_loss(x, [dataset_match])
+
+        self.assertLess(loss_match, loss_zero)
+
+
+if __name__ == "__main__":
+    unittest.main()
