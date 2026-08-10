@@ -164,11 +164,14 @@ class FittingDataset:
 
         self.f_residual = None
 
-    def attach_residual_force(self, f_residual):
-        if (len(f_residual) == len(self.omega)):
-            print("f_residual mismatch the length with the other data")
+        self.v_body = np.array(df["v"].to_list())
+
+        # Optional: sensed wind (background + induced velocity) at each rotor, in inertial frame.
+        # Present in datasets recorded after this field was added to the logger.
+        if "rotor_0_sensed_wind_velocity" in df.columns:
+            self.rotor_0_sensed_wind_velocity = np.array(df["rotor_0_sensed_wind_velocity"].to_list())
         else:
-            self.f_residual = f_residual
+            self.rotor_0_sensed_wind_velocity = None
 
     def is_ready_for_second_training(self):
         is_ready = False

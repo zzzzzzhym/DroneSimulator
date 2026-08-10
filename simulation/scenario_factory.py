@@ -56,6 +56,14 @@ class Factory:
             init_state,
             dt_dynamics)
 
+        # import external_sim.propeller_test_stand
+        # assembly = external_sim.propeller_test_stand.PropellerTestStand(
+        #     drone_params,
+        #     propeller_params,
+        #     disturbance_model,
+        #     init_state,
+        #     dt_dynamics)
+
         # import external_sim.wind_field_collector
         # assembly = external_sim.wind_field_collector.WindFieldCollector(
         #     drone_params,

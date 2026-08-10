@@ -55,7 +55,35 @@ class Rotor:
 
     def step_rotation_speed(self, speed):
         self.rotation_speed = speed
-    
+
+    def set_force_from_body_frame(self, f_body: np.ndarray):
+        """Set rotor force from body-frame measurement.
+
+        Converts to inertial frame using the current rotor pose and updates
+        thrust (body-z component) and f_rotor_inertial_frame.
+
+        Args:
+            f_body: 3D force vector in body frame.
+        """
+        self.f_rotor_inertial_frame = self.pose @ f_body
+        self.thrust = float(f_body[2])
+
+    def set_local_wind_velocity(self, velocity: np.ndarray, frame: str):
+        if frame == 'body':
+            self.local_wind_velocity = self.pose @ velocity
+        elif frame == 'inertial':
+            self.local_wind_velocity = velocity
+        else:
+            raise ValueError(f"Invalid frame selection: {frame}, should be either 'body' or 'inertial'")
+
+    def set_sensed_wind_velocity(self, sensed_wind_velocity: np.ndarray, frame: str):
+        if frame == 'body':
+            self.sensed_wind_velocity = self.pose @ sensed_wind_velocity
+        elif frame == 'inertial':
+            self.sensed_wind_velocity = sensed_wind_velocity
+        else:
+            raise ValueError(f"Invalid frame selection: {frame}, should be either 'body' or 'inertial'")
+
 class RotorSet:
     """This class manage the collection of all rotors on the drone."""    
     def __init__(self, drone: params.Multicopter, propeller: propeller.Propeller) -> None:

@@ -13,6 +13,9 @@ import drone.rotor
 import external_sim.cfd_wind_field_lookup.vtk_reader
 
 
+_NO_WALL_THRESHOLD = 50  # wall distances beyond this (m) are treated as free field
+
+
 class SimpleMotorModel:
     def __init__(self):
         # parameters from screenshot
@@ -54,8 +57,13 @@ class P600(simulation.scenario.Dynamics):
 
         self.main_api = ar.Controller()
         self.configure_sim_environment(disturbance.u_free, disturbance.wind_field_model.wall_origin[0], init_state.get_position_in("inertial"))
-        self.background_wind_reader = external_sim.cfd_wind_field_lookup.vtk_reader.VtkReader(Path(r"C:\Users\jiexu\Downloads\Aerocae Robotics - Geng 2025\export"))
-        self.background_wind_reader.load_mesh_by_wind_velocity(disturbance.u_free)
+        wall_distance = disturbance.wind_field_model.wall_origin[0]
+        if abs(wall_distance) > _NO_WALL_THRESHOLD:
+            print("Treating as no wall environment, using free stream wind velocity as background wind")
+            self.background_wind_reader = external_sim.cfd_wind_field_lookup.vtk_reader.FreeStreamReader(disturbance.u_free)
+        else:
+            self.background_wind_reader = external_sim.cfd_wind_field_lookup.vtk_reader.VtkReader(Path(r"C:\Users\jiexu\Downloads\Aerocae Robotics - Geng 2025\export"))
+            self.background_wind_reader.load_mesh_by_wind_velocity(disturbance.u_free, wall_distance)
 
         self.rotors = drone.rotor.RotorSet(drone_params, propeller)
         self.state = simulation.interface.DynamicsOutput(
@@ -72,6 +80,7 @@ class P600(simulation.scenario.Dynamics):
             tip_position=np.zeros(3),
         )
         self.i = 0
+        self._log_data = {"throttle_level": None}
 
         self.main_api.start()
 
@@ -132,7 +141,16 @@ class P600(simulation.scenario.Dynamics):
         # wall = self.main_api.get_object('floor/tracker')
         # self.main_api.set_object_property_float(wall, 'plane_origin.x', wall_offset)
         wall = self.main_api.get_object('floor')
-        self.main_api.set_object_property_float(wall, 'position.x', wall_offset)
+        if abs(wall_offset) > _NO_WALL_THRESHOLD:
+            self.main_api.set_object_property_uint(wall, 'enabled', 0)
+        else:
+            self.main_api.set_object_property_float(wall, 'position.x', wall_offset)
+
+    def _log(self, name: str, value) -> None:
+        self._log_data[name] = value.copy() if hasattr(value, 'copy') else value
+
+    def get_log_data(self) -> dict:
+        return self._log_data
 
     def filter_motor_speed(self, speeds: np.ndarray) -> np.ndarray:
         # clip first (physical limits)
@@ -182,6 +200,7 @@ class P600(simulation.scenario.Dynamics):
         # k = 0.5
         # throttles = [k, k, k, k]
         print("throttle level: ", throttles)
+        self._log("throttle_level", throttles)
         return {
             setter: throttle
             for setter, throttle in zip(self.motor_throttle_setters, throttles)
@@ -196,13 +215,9 @@ class P600(simulation.scenario.Dynamics):
         speeds = np.abs(speeds)
         return speeds
 
-    def get_rotor_thrust(self, reply):
-        thrusts = [reply.get_output_of(getter)[2] for getter in self.rotor_force_getters]
-        print("rotor thrust:", thrusts)
-        if any(t is None for t in thrusts):
-            return np.zeros(len(self.rotor_force_getters))
-
-        return np.array(thrusts)
+    def get_rotor_forces_body_frame(self, reply):
+        forces = [reply.get_output_of(getter)[0:3] for getter in self.rotor_force_getters]
+        return forces
 
     def get_wind_speed(self, reply):
         return np.array([reply.get_output_of(getter) for getter in self.flow_sensor_getters])
@@ -213,7 +228,7 @@ class P600(simulation.scenario.Dynamics):
         # torque = package[3:6]
         return force
 
-    def save_dynamics_state(self, body_state_data, flow_speeds, rotation_speed, rotor_thrusts):
+    def save_dynamics_state(self, body_state_data, flow_speeds, rotation_speed, rotor_forces_body_frame):
         # body_state_data:
         # Dofs: 19
         # Dof 0-2: world pos x,y,z
@@ -234,12 +249,11 @@ class P600(simulation.scenario.Dynamics):
 
         self.rotors.step_all_rotor_states(body_state, rotation_speed)
         for flow_speed, rotor in zip(flow_speeds, self.rotors.rotors):
-            rotor.local_wind_velocity = self.background_wind_reader.get_velocity_at(rotor.position_inertial_frame)
-            print("rotor.local_wind_velocity", rotor.local_wind_velocity) # debug
+            rotor.set_local_wind_velocity(self.background_wind_reader.get_velocity_at(rotor.position_inertial_frame), frame='inertial')
             # rotor.local_wind_velocity = np.array(flow_speed)  # somehow only this one works
-            rotor.sensed_wind_velocity = np.array(flow_speed)
-        for rotor_thrust, rotor in zip(rotor_thrusts, self.rotors.rotors):
-            rotor.thrust = np.array(rotor_thrust)
+            rotor.set_sensed_wind_velocity(np.array(flow_speed), frame='body')
+        for f_body, rotor in zip(rotor_forces_body_frame, self.rotors.rotors):
+            rotor.set_force_from_body_frame(f_body)
 
         self.state = simulation.interface.DynamicsOutput(
             position=np.array(body_state_data[0:3]),
@@ -253,7 +267,7 @@ class P600(simulation.scenario.Dynamics):
 
     def save_extended_world_perception(self, reply):
         self.contact_force = simulation.interface.ExtendedWorldPerception(
-            contact_force=self.get_end_effector_force(reply),
+            contact_force=self.state.pose @ self.get_end_effector_force(reply),
             tip_position=self.state.get_position_in("inertial"))    # temporary solution, should change back to tip
 
     def get_dynamics_output(self) -> simulation.interface.DynamicsOutput:
@@ -285,7 +299,7 @@ class P600(simulation.scenario.Dynamics):
             self.save_dynamics_state(reply.get_output_of(self.sensor), 
                                      self.get_wind_speed(reply), 
                                      self.get_motor_speed(reply),
-                                     self.get_rotor_thrust(reply))
+                                     self.get_rotor_forces_body_frame(reply))
             self.save_extended_world_perception(reply)            
 
     def shutdown(self):
