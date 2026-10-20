@@ -1,10 +1,7 @@
-# Training-data generation config.
-#
-# All runtime logic lives in training_data_user_guide.py; this file only holds the
-# tuning variables that a user may want to change between runs.
+# Training-data generation config: tuning variables for training_data_user_guide.py.
 #
 # Pick which use case to run. One of: training | validation | fitting | fitting_validation
-selected_config: fitting
+selected_config: training
 
 # Controller tracking error margin added to every wall distance, to prevent
 # collision with the wall (meters).
