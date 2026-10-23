@@ -368,7 +368,7 @@ class TrainingDataFactory(DataFactory):
         The Normalization accumulators are keyed by the flattened header names produced by
         extract_header_from_input_label_map (``field`` for scalars, ``field_dim`` otherwise)."""
         for field, dimensions in field_map.items():
-            if dimensions is None:
+            if dimensions is None:  # 1D data (no dimension info in the yaml)
                 mean, scale = normalization[field].get_normalization_params()
                 section[field] = {"mean": mean, "scale": scale}
             else:
